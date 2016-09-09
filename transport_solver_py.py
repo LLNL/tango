@@ -1,21 +1,13 @@
-# Tango is a transport equation solver intended for coupling with codes that calculate turbulent fluxes.
-# Copyright (C) 2016 Lawrence Livermore National Security, LLC
-# Authored by Jeff Parker 
-
-# This file is part of Tango.
+# Copyright (c) 2016, Lawrence Livermore National Security, LLC.  Produced at
+# the Lawrence Livermore National Laboratory.  LLNL-CODE-702341.  All Rights
+# Reserved.
 #
-# Tango is free software: you can redistribute it and/or modify
-# it under the terms of the GNU Lesser General Public License as published by
-# the Free Software Foundation, either version 3 of the License, or
-# (at your option) any later version.
+# This file is part of Tango, a transport equation solver intended for coupling
+# with codes that calculate turbulent fluxes.
 #
-# Tango is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU Lesser General Public License for more details.
-#
-# You should have received a copy of the GNU Lesser General Public License
-# along with Tango.  If not, see <http://www.gnu.org/licenses/>
+# Tango is free software: you can redistribute it and/or modify it under the
+# terms of the GNU Lesser General Public License (as published by the Free
+# Software Foundation) version 2.1 dated February 1999.
 
 from __future__ import division
 import numpy as np
