@@ -1,13 +1,4 @@
-"""Copyright (c) 2016, Lawrence Livermore National Security, LLC.  Produced at
-the Lawrence Livermore National Laboratory.  LLNL-CODE-702341.  All Rights
-Reserved.
-
-This file is part of Tango, a transport equation solver intended for coupling
-with codes that calculate turbulent fluxes.
-
-Tango is free software: you can redistribute it and/or modify it under the
-terms of the GNU Lesser General Public License (as published by the Free
-Software Foundation) version 2.1 dated February 1999"""
+"""See https://github.com/LLNL/tango for copyright and license information"""
 
 from __future__ import division
 import numpy as np
@@ -57,7 +48,7 @@ class TurbulenceHandler(object):
             Inputs:
               dx          grid spacing for independent variable x [sometimes referred to in
                             the documentation as psi] (scalar)
-              lmparams    dict containing parameters to be used by the lodestro method
+              lmparams    parameters to be used by the lodestro method (dict)
                             --> EWMA_param_turbflux, EWMA_param_profile, thetaparams
               FluxModel   object with a GetFlux() method
               grids       (optional) object for transforming the profiles and transport coefficients
@@ -94,23 +85,28 @@ class TurbulenceHandler(object):
         quantities on the turbulence grid are also handled.
          
         Inputs:
+          profile           (array)
         
         Outputs:
-          H2         array
-          H3         array
-          data       other data
+          H2contrib         array
+          H3contrib         array
+          data              other data
         """
-        profile_turbgrid = self.grids.MapProfileOntoTurbGrid(profile)  # need to set up the grids object
+        profile_turbgrid = self.grids.MapProfileOntoTurbGrid(profile)
         profileEWMA_turbgrid = self.LoDestroMethod.EWMA_Profile(profile_turbgrid) # could also reverse the order of this and the previous step...
         
-        flux_turbgrid = self.FluxModel.GetFlux(profileEWMA_turbgrid)   # need to set this up generally...
+        flux_turbgrid = self.FluxModel.GetFlux(profileEWMA_turbgrid)
         fluxEWMA_turbgrid = self.LoDestroMethod.EWMA_TurbFlux(flux_turbgrid)
         (D_turbgrid, c_turbgrid, Dcdata_turbgrid) = self.LoDestroMethod.FluxToTransportCoeffs(fluxEWMA_turbgrid, profileEWMA_turbgrid, self.dx)
-        (D, c) = self.grids.MapTransportCoeffsOntoTransportGrid(D_turbgrid, c_turbgrid)  # need to set this up generally
+        (D, c) = self.grids.MapTransportCoeffsOntoTransportGrid(D_turbgrid, c_turbgrid)
         (H2contrib, H3contrib) = self.DcToHcontrib(D, c)
         
         # Other data that may be useful for debugging or data analysis purposes
-        data = {'D': D, 'c': c, 'D_turbgrid': D_turbgrid, 'c_turbgrid': c_turbgrid, 'DCdata_turbgrid': Dcdata_turbgrid}
+        data = {'D': D, 'c': c,
+                'profile_turbgrid': profile_turbgrid, 'profileEWMA_turbgrid': profileEWMA_turbgrid,
+                'flux_turbgrid': flux_turbgrid, 'fluxEWMA_turbgrid': fluxEWMA_turbgrid,
+                'D_turbgrid': D_turbgrid, 'c_turbgrid': c_turbgrid,
+                'Dhat_turbgrid': Dcdata_turbgrid['D_hat'], 'chat_turbgrid': Dcdata_turbgrid['c_hat'], 'theta_turbgrid': Dcdata_turbgrid['theta']}
         return (H2contrib, H3contrib, data)
         
         
@@ -328,7 +324,7 @@ class FluxSplit(object):
         Outputs:
           dudx      (array, same length as u)
         """
-        dudx = np.zeros_like(u)
+        dudx = np.zeros_like(u, dtype=float)
         dudx[0] = (u[1] - u[0]) / dx
         dudx[1:-1] = (u[2:] - u[:-2]) / (2*dx)
         dudx[-1] = (u[-1] - u[-2]) / dx
@@ -387,5 +383,4 @@ class grids_DoNothing(object):
     def MapProfileOntoTurbGrid(self, profile):
         return profile
     def MapTransportCoeffsOntoTransportGrid(self, D, c):
-        return (D, c)
-    
+        return (D, c)    

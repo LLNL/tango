@@ -1,13 +1,4 @@
-"""Copyright (c) 2016, Lawrence Livermore National Security, LLC.  Produced at
-the Lawrence Livermore National Laboratory.  LLNL-CODE-702341.  All Rights
-Reserved.
-
-This file is part of Tango, a transport equation solver intended for coupling
-with codes that calculate turbulent fluxes.
-
-Tango is free software: you can redistribute it and/or modify it under the
-terms of the GNU Lesser General Public License (as published by the Free
-Software Foundation) version 2.1 dated February 1999"""
+"""See https://github.com/LLNL/tango for copyright and license information"""
 
 from __future__ import division
 import numpy as np
@@ -22,12 +13,17 @@ def solve(A, B, C, D):
     [                   CN-1   BN-1   AN-1]  .        .
     [                          CN     BN  ] [uN]     [DN]
     
-    The arrays A, and C must have the same length as B.  A[-1] must be 0 and C[0] must be 0.  We can also write the matrix equation as
+    The arrays A, and C must have the same length as B.  A[-1] must be 0 and C[0] must be 0.
+      We can also write the matrix equation as
     C_j u_{j-1}  +  B_j u_j  +  A_j u_{j+1} = D_j      j = 0, ..., N
+    
+    Use the Thomas Algorithm.  For details, see any standard numerical methods textbooks, e.g.,
+    Jardin -- Computational Methods in Plasma Physics, Section 3.2.2
     
     Inputs:  1D arrays A, B, C, D, each of the same length.
     Output:  Solution u
     """
+    
     B = -B # algorithm in Jardin's Computational Plasma Physics textbook used negative B on the diagonal
     assert len(B)==len(A) and len(C)==len(A) and len(D)==len(A), 'lengths must be equal'
     assert A[-1]==0, 'last element of A must be zero'
@@ -72,3 +68,19 @@ def solve(A, B, C, D):
     assert np.linalg.norm(obs - exp) < tol
     
     """
+    
+def IsDiagonallyDominant(A, B, C):
+    """The Thomas Algorithm is only guaranteed to be stable if the matrix is diagonally dominant.  This requires
+
+                            |B_j| > |A_j| + |C_j|,  for all j.
+      
+      Inputs:
+        A, B, C                    1D arrays specifying a tridiagonal matrix (arrays)
+      Outputs:
+        isDiagDominant             True if matrix is diagonally dominant (boolean)
+    """
+    assert len(B)==len(A) and len(C)==len(A), 'lengths must be equal'
+    assert A[-1]==0, 'last element of A must be zero'
+    assert C[0]==0, 'first element of C must be zero'
+    isDiagDominant = np.all(np.abs(B) - (np.abs(A) + np.abs(C)) > 0)
+    return isDiagDominant

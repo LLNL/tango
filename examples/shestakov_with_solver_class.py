@@ -1,5 +1,7 @@
 """Example for how to use tango to solve a turbulence and transport problem.
 
+Using a solver class
+
 Here, the "turbulent flux" is specified analytically, using the example in the Shestakov et al. (2003) paper.
 This example is a nonlinear diffusion equation with specified diffusion coefficient and source.  There is a
 closed form answer for the steady state solution which can be compared with the numerically found solution.
@@ -9,6 +11,8 @@ from __future__ import division, absolute_import
 import numpy as np
 import matplotlib
 import matplotlib.pyplot as plt
+import logging
+
 
 from tango.extras import shestakov_nonlinear_diffusion
 import tango as tng
@@ -24,7 +28,7 @@ def initialize_shestakov_problem():
     return (L, N, dx, x, nL, n_initialcondition)
 
 def initialize_parameters():
-    MaxIterations = 2000
+    MaxIterations = 100
     thetaparams = {'Dmin': 1e-5,
                    'Dmax': 1e13,
                    'dpdx_thresh': 10}
@@ -36,81 +40,50 @@ def initialize_parameters():
     tol = 1e-11  # tol for convergence... reached when a certain error < tol
     return (MaxIterations, lmparams, tol)
 
-def Compute_Hs(x, n, turbhandler):
+def ComputeAllH(t, x, n, turbhandler):
     # Define the contributions to the H coefficients for the Shestakov Problem
     H1 = np.ones_like(x)
     H7 = shestakov_nonlinear_diffusion.H7contrib_Source(x)
-    (H2, H3, data) = turbhandler.Hcontrib_TurbulentFlux(n)
+    (H2, H3, extradata) = turbhandler.Hcontrib_TurbulentFlux(n)
     H4 = None
     H6 = None
-    return (H1, H2, H3, H4, H6, H7)
+    return (H1, H2, H3, H4, H6, H7, extradata)
     
-def Get_dt(t, m):
-    # assuming the user specifies an array t of times, and we are on the mth step, return the time
-    # increment dt = t[m] - t[m-1]
-    return t[m] - t[m-1] # particularly important if using non-constant timestesp
-    
-def CheckConvergence(A, B, C, f, n, tol):
-    # convergence check: is || ( M[n^l] n^l - f[n^l] ) / max(abs(f)) || < tol
-    # could add more convergence checks
-    resid = A*np.concatenate((n[1:], np.zeros(1))) + B*n + C*np.concatenate((np.zeros(1), n[:-1])) - f
-    resid = resid / np.max(np.abs(f))  # normalize residuals
-    rms_error = np.sqrt( 1/len(resid) * np.sum(resid**2))  
-    converged = False
-    if rms_error < tol:
-        converged = True
-    return (converged, rms_error, resid)
-
 #==============================================================================
 #  MAIN STARTS HERE
 #==============================================================================
+logfile = 'example_class.log'
+logging.basicConfig(filename=logfile, filemode='w', level=logging.INFO)
+#logging.basicConfig(level=logging.INFO)
+
+
+logging.info("Initializing...")
 L, N, dx, x, nL, n = initialize_shestakov_problem()
 MaxIterations, lmparams, tol = initialize_parameters()
-
-           
 FluxModel = shestakov_nonlinear_diffusion.shestakov_analytic_fluxmodel(dx)
 turbhandler = tng.TurbulenceHandler(dx, lmparams, FluxModel)
-errhistory = np.zeros(MaxIterations-1)      # error history vs. iteration at a given timestep
-t = np.array([0, 1e4])  # specify the timesteps to be used.
-n_mminus1 = n           # initialize "m minus 1" variables for the first timestep
 
-for m in range(1, len(t)):
+t_array = np.array([0, 1e4])  # specify the timesteps to be used.
+
+solver = tng.solver.solver(L, x, n, nL, t_array, MaxIterations, tol, ComputeAllH, turbhandler)
+
+# set up data logger
+arrays_to_save = ['H2', 'H3', 'profile']
+databasename = 'shestakov_solution_data'
+solver.DataSaverHandler.initialize_datasaver(databasename, MaxIterations, arrays_to_save)
+logging.info("Preparing DataSaver to save files with prefix {}.".format(databasename))
+
+logging.info("Initialization complete.")
+
+logging.info("Beginning time integration...")
+while solver.ok:
     # Implicit time advance: iterate to solve the nonlinear equation!
-    converged = False
-    dt = Get_dt(t, m)
-    
-    l = 1   # reset iteration counter
-    errhistory[:] = 0
-    while not converged:
-        # compute H's from current iterate n
-        (H1, H2, H3, H4, H6, H7) = Compute_Hs(x, n, turbhandler)
-        
-        # compute matrix system (A, B, C, f)
-        (A, B, C, f) = tng.HToMatrix(dt, dx, nL, n_mminus1, H1, H2=H2, H3=H3, H4=H4, H6=H6, H7=H7)
+    solver.TakeTimestep()
 
-        converged, rms_error, resid = CheckConvergence(A, B, C, f, n, tol)
-        errhistory[l-1] = rms_error
-        
-        # compute new iterate n
-        n = tng.solve(A, B, C, f)
-               
-        # Check for NaNs or infs
-        if np.all(np.isfinite(n)) == False:
-            raise RuntimeError('NaN or Inf detected at l=%d.  Exiting...' % (l))
-        
-        # about to loop to next iteration l
-        l += 1
-        if l >= MaxIterations:
-            raise RuntimeError('Too many iterations on timestep %d.  Error is %f.' % (m, rms_error))
-        
-        # end of while loop for iteration convergence
-    
-    # Converged.  Before advancing to next timestep m, save some stuff
-    n_mminus1 = n
-    
-    print('Number of iterations is %d' % l)
-    # end for loop for time advancement
 
+    
+    
+n = solver.profile  # finished solution
 # Plot result and compare with analytic steady state solution
 nss = shestakov_nonlinear_diffusion.GetSteadyStateSolution(x, nL)
 
@@ -120,7 +93,13 @@ plt.plot(x, nss, 'r-')
 
 solution_residual = (n - nss) / np.max(np.abs(nss))
 solution_rms_error = np.sqrt( 1/len(n) * np.sum(solution_residual**2))
-print('Error compared to analytic steady state solution is %f' % (solution_rms_error))
+
+if solver.reached_end == True:
+    print("The solution has been reached successfully.")
+    print('Error compared to analytic steady state solution is %f' % (solution_rms_error))
+else:
+    print("The solver failed for some reason.  See log file {}".format(logfile))
+    print('Error at end compared to analytic steady state solution is %f' % (solution_rms_error))
 
 
 #plt.figure()

@@ -1,13 +1,4 @@
-"""Copyright (c) 2016, Lawrence Livermore National Security, LLC.  Produced at
-the Lawrence Livermore National Laboratory.  LLNL-CODE-702341.  All Rights
-Reserved.
-
-This file is part of Tango, a transport equation solver intended for coupling
-with codes that calculate turbulent fluxes.
-
-Tango is free software: you can redistribute it and/or modify it under the
-terms of the GNU Lesser General Public License (as published by the Free
-Software Foundation) version 2.1 dated February 1999"""
+"""See https://github.com/LLNL/tango for copyright and license information"""
 
 from __future__ import division
 import numpy as np
@@ -77,7 +68,10 @@ def HToMatrix(dt, dx, UL, U_mminus1, H1, H2=None, H3=None, H4=None, H6=None, H7=
     Outputs:
      A, B, C, D                arrays to specify a matrix equation in tridiagonal form
      
-     
+    The tridiagonal matrix equation is specified as
+    
+                    C_j u_{j-1}  +  B_j u_j  +  A_j u_{j+1} = D_j      j = 0, ..., N-1
+
     Each coefficient H_i accumulates terms into the A, B, C, g arrays.  A separate function performs the accumulation
       for the different H_i coefficients.  
       
@@ -124,6 +118,9 @@ def HToMatrix(dt, dx, UL, U_mminus1, H1, H2=None, H3=None, H4=None, H6=None, H7=
 
 def solve(A, B, C, D):
     return tridiag.solve(A, B, C, D)
+    
+def IsDiagonallyDominant(A, B, C):
+    return tridiag.IsDiagonallyDominant(A, B, C)
     
 def HToMatrixAndSolve(dt, dx, UL, U_mminus1, H1, H2=None, H3=None, H4=None, H6=None, H7=None):
     (A, B, C, D) = HToMatrix(dt, dx, UL, U_mminus1, H1, H2, H3, H4, H6, H7)

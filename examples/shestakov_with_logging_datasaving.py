@@ -9,6 +9,8 @@ from __future__ import division, absolute_import
 import numpy as np
 import matplotlib
 import matplotlib.pyplot as plt
+import logging
+
 
 from tango.extras import shestakov_nonlinear_diffusion
 import tango as tng
@@ -36,7 +38,7 @@ def initialize_parameters():
     tol = 1e-11  # tol for convergence... reached when a certain error < tol
     return (MaxIterations, lmparams, tol)
 
-def Compute_Hs(x, n, turbhandler):
+def Compute_AllH(t, x, n, turbhandler):
     # Define the contributions to the H coefficients for the Shestakov Problem
     H1 = np.ones_like(x)
     H7 = shestakov_nonlinear_diffusion.H7contrib_Source(x)
@@ -64,16 +66,32 @@ def CheckConvergence(A, B, C, f, n, tol):
 #==============================================================================
 #  MAIN STARTS HERE
 #==============================================================================
+logging.basicConfig(filename='example.log', filemode='w', level=logging.INFO)
+#logging.basicConfig(level=logging.INFO)
+varname = 'n'
+
+
+
+logging.info("Initializing...")
 L, N, dx, x, nL, n = initialize_shestakov_problem()
 MaxIterations, lmparams, tol = initialize_parameters()
 
-           
+arrays_to_save = ['H2', 'H3', 'n']
+def pkg_data(H2=None, H3=None, n=None):
+    data = {'H2': H2, 'H3': H3, 'n':n}
+    return data
+    
+DataSaver = tng.datasaver.dataSaver(MaxIterations, arrays_to_save)
+
+            
 FluxModel = shestakov_nonlinear_diffusion.shestakov_analytic_fluxmodel(dx)
 turbhandler = tng.TurbulenceHandler(dx, lmparams, FluxModel)
 errhistory = np.zeros(MaxIterations-1)      # error history vs. iteration at a given timestep
 t = np.array([0, 1e4])  # specify the timesteps to be used.
 n_mminus1 = n           # initialize "m minus 1" variables for the first timestep
+logging.info("Initialization complete.")
 
+logging.info("Beginning time integration...")
 for m in range(1, len(t)):
     # Implicit time advance: iterate to solve the nonlinear equation!
     converged = False
@@ -81,9 +99,10 @@ for m in range(1, len(t)):
     
     l = 1   # reset iteration counter
     errhistory[:] = 0
+    logging.info("Beginning iteration loop for timestep {}...".format(m))
     while not converged:
         # compute H's from current iterate n
-        (H1, H2, H3, H4, H6, H7) = Compute_Hs(x, n, turbhandler)
+        (H1, H2, H3, H4, H6, H7) = Compute_AllH(t, x, n, turbhandler)
         
         # compute matrix system (A, B, C, f)
         (A, B, C, f) = tng.HToMatrix(dt, dx, nL, n_mminus1, H1, H2=H2, H3=H3, H4=H4, H6=H6, H7=H7)
@@ -93,7 +112,14 @@ for m in range(1, len(t)):
         
         # compute new iterate n
         n = tng.solve(A, B, C, f)
-               
+        
+        logging.info("Timestep m={}: after iteration number l={}, first 4 entries of {}={};  last 4 entries n={}".format(
+            m, l, varname, n[:4], n[-4:]))
+        
+        # save data if desired
+        
+        DataSaver.AddData( pkg_data(H2=H2, H3=H3, n=n), l)
+        
         # Check for NaNs or infs
         if np.all(np.isfinite(n)) == False:
             raise RuntimeError('NaN or Inf detected at l=%d.  Exiting...' % (l))
@@ -105,9 +131,15 @@ for m in range(1, len(t)):
         
         # end of while loop for iteration convergence
     
-    # Converged.  Before advancing to next timestep m, save some stuff
-    n_mminus1 = n
+    # Converged.  Before advancing to next timestep m, save some stuff   
+    if m==len(t)-1:   # save on the final timestep only
+        errhistory_final = errhistory[0:l-1]
+        one_off_data = {'x': x, 'n_mminus1': n_mminus1, 'errhistory': errhistory_final, 't': t[m], 'm': m}
+        DataSaver.AddOneOffData(one_off_data)
+        data_filename = 'shestakov_example_data'
+        DataSaver.SaveToFile(data_filename)
     
+    n_mminus1 = n
     print('Number of iterations is %d' % l)
     # end for loop for time advancement
 

@@ -1,9 +1,11 @@
+"""See https://github.com/LLNL/tango for copyright and license information"""
+
 """Shestakov Test Module"""
 
 from __future__ import division
 import numpy as np
 
-class shestakov_analytic_fluxmodel:
+class shestakov_analytic_fluxmodel(object):
     """Class-based interface to the flux model in the Shestakov analytic
     test problem.
     
