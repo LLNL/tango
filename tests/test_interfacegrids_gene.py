@@ -107,3 +107,13 @@ def test_TruncateOnLeft_ExtrapolateOnRight():
     obs = y_eval
     exp = np.array([4.35546444, 3.9775479, 3.63970781, 3.4, 3.22681231, 3.06202911, 2.91182052, 2.78809524, 2.6447619, 2.50142857])
     assert np.allclose(obs, exp, rtol=0, atol=1e-6)
+
+def test_TruncateOnLeft_FixedSlopeOnRight():
+    x = np.array([1.0, 2.0, 3.0, 4.0])
+    y = np.array([1.0, 3.0, 4.5, 6.0])
+    x_eval = np.array([1.5, 2.5, 3.5, 4.0, 4.5, 5.5])
+    outwardSlope = -0.2
+    y_eval = tango.interfacegrids_gene.TruncateOnLeft_FixedSlopeOnRight(x, y, x_eval, outwardSlope)
+    obs = y_eval
+    exp = np.array([2.09375, 3.78125, 5.21875,  6.,  5.9, 5.7])
+    assert np.allclose(obs, exp, rtol=0, atol=1e-4)

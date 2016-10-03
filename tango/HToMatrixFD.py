@@ -118,14 +118,10 @@ def HToMatrix(dt, dx, UL, U_mminus1, H1, H2=None, H3=None, H4=None, H6=None, H7=
 
 def solve(A, B, C, D):
     return tridiag.solve(A, B, C, D)
-    
-def IsDiagonallyDominant(A, B, C):
-    return tridiag.IsDiagonallyDominant(A, B, C)
-    
+        
 def HToMatrixAndSolve(dt, dx, UL, U_mminus1, H1, H2=None, H3=None, H4=None, H6=None, H7=None):
     (A, B, C, D) = HToMatrix(dt, dx, UL, U_mminus1, H1, H2, H3, H4, H6, H7)
-    return solve(A, B, C, D)
-    
+    return solve(A, B, C, D)    
 
 def _H1contribution(H1, U_mminus1, dt):
     N = len(H1)

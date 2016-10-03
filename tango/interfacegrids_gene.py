@@ -71,8 +71,9 @@ class GridInterface_TangoInside(object):
       extends radially outward farther than GENE's.  At the inner bounadry, Tango's grid extends
       radially inward farther than GENE's.
     
-    Mapping a profile from the transport grid onto GENE's grid: since Tango's domain is larger in
-    both directions, we can use a simple interpolating spline
+    Mapping a profile from the transport grid onto GENE's grid: On the inward side where Tango's domain
+    is larger, we can use a simple interpolating spline.On the outward side, Tango's profile is
+    extrapolated.
     
     Mapping transport coefficients from GENE's grid to Tango's grid: we first resample the transport
     coefficients on the part of Tango's grid that overlaps with GENE's grid, then add zeros where
@@ -109,6 +110,28 @@ class GridInterface_TangoInside(object):
         Outputs:
           f_tango             f(psi) on the Tango grid (array)
         """
+        f_tango = ExtendWithZeros_LeftSide(self.psi_gene, f_gene, self.psi_tango, enforcePositive=enforcePositive)
+        return f_tango
+        
+class GridInterface_TangoInside_fixedoutside(object):
+    """Similar to GridInterface_TangoInside.  But instead of linearly extrapolating Tango's profile on the outward side,
+    a *fixed* slope in the non-overlapping region is used.  In the region where GENE's radial domain exists but Tango's
+    does not, the profile is fixed for all time (where a Dirichlet boundary condition for Tango is assumed)
+    
+    """
+    def __init__(self, psi_tango, psi_gene, outwardslope_gene):
+        self.psi_tango = psi_tango  # values of flux coordinate psi on tango's grid
+        self.psi_gene = psi_gene    # values of psi on gene's grid
+        self.outwardslope_gene = outwardslope_gene       # imposed value of dp/dpsi in gene's outer region
+        assert outwardslope_gene < 0, "You probably meant to impose a negative, not positive, slope on the outward side."
+    def MapProfileOntoTurbGrid(self, profile_tango):
+        profile_gene = TruncateOnLeft_ExtrapolateOnRight(self.psi_tango, profile_tango, self.psi_gene, enforcePositive=True)
+        return profile_gene
+    def MapTransportCoeffsOntoTransportGrid(self, D_genegrid, c_genegrid):
+        D_tango = self.MapToTransportGrid(D_genegrid, enforcePositive=True)
+        c_tango = self.MapToTransportGrid(c_genegrid)
+        return (D_tango, c_tango)
+    def MapToTransportGrid(self, f_gene, enforcePositive=False):
         f_tango = ExtendWithZeros_LeftSide(self.psi_gene, f_gene, self.psi_tango, enforcePositive=enforcePositive)
         return f_tango
         
@@ -295,6 +318,64 @@ def TruncateOnLeft_ExtrapolateOnRight(x_in, f_in, x_out, numPts=10, enforcePosit
     """
     assert x_out[0] >= x_in[0] and x_out[-1] >= x_in[-1]
     extrapolator = MakeExtrapolator(x_in, f_in, side='right', numPts=numPts)
+    f_out = extrapolator(x_out)
+    
+    if enforcePositive == True:
+        ind = f_out < 0
+        f_out[ind] = 0
+    
+    return f_out
+
+def MakeExtrapolator_fixedslope(x_small, f_small, outwardSlope):
+    """Create an extrapolator that uses cubic interpolation within the given domain x_small, and an
+    imposed linear fit with imposed slope outside the given domain x_small.  Data must be sorted.
+    
+    Inputs:
+      x_small           independent variable on the smaller domain (array)
+      f_small           dependent variable on the smaller domain (array)
+      outwardSlope      imposed slope outside the domain x_small
+    Outputs:
+      extrapolator      function that can be evaluated on a domain, like interpolators
+    """
+    def extrapolator(x_large):
+        f_large = np.zeros_like(x_large, dtype=np.float)
+        # exterior region: left side
+        ind_leftexterior = x_large < x_small[0]
+        f_large[ind_leftexterior] = outwardSlope * (x_large[ind_leftexterior] - x_small[0]) + f_small[0]
+        
+        #exterior region: right side
+        ind_rightexterior = x_large > x_small[-1]
+        f_large[ind_rightexterior] = outwardSlope * (x_large[ind_rightexterior] - x_small[-1]) + f_small[-1]
+        
+        # interpolated points in the interior using cubic interpolation
+        ip_interior = scipy.interpolate.InterpolatedUnivariateSpline(x_small, f_small, k=3) # cubic 
+        ind_interior = (x_large >= x_small[0]) & (x_large <= x_small[-1])
+        f_large[ind_interior] = ip_interior(x_large[ind_interior])
+        return f_large
+    return extrapolator   
+
+def TruncateOnLeft_FixedSlopeOnRight(x_in, f_in, x_out, outwardSlope, enforcePositive=False):
+    """Map f_in from a 1D domain x_in to another domain x_out.  To be used when x_out[0] > x_in[0]
+      and x_out[-1] > x_in[-1].  On the left side of the domain, where x_out is contained within
+      x_in, f_in is truncated.  On the right side of the domain, where x_out is not contained within
+      x_in, f_out is set to a fixed profile --- linear in this case.
+    
+    The output, f_out, is defined on the x_out grid.  In the region of overlap, f_out is just f_in 
+    resampled using cubic interpolation.  Outside the region of overlap, on the right boundary,
+    f_out is determined by the last point of f_in, and an imposed slope.
+    
+    Inputs:
+      x_in                  independent variable on the input domain (array)
+      f_in                  dependent variable on the input domain (array)
+      x_out                 independent variable on the new domain (array)
+      outwardSlope          imposed value of the slope determining f_out on the right side
+      enforcePositive       (optional) If True, set any negative values to zero before returning (boolean)
+    
+    Outputs:
+      f_out                 dependent variable on the new domain (array)
+    """
+    assert x_out[0] >= x_in[0] and x_out[-1] >= x_in[-1]
+    extrapolator = MakeExtrapolator_fixedslope(x_in, f_in, outwardSlope)
     f_out = extrapolator(x_out)
     
     if enforcePositive == True:

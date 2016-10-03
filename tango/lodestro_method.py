@@ -119,6 +119,9 @@ class TurbulenceHandler(object):
                 3/2 V' dp/dt - d/dpsi[ V' D dp/dpsi - V'c p] 
         Hence, H2 = V'*D  and  H3 = -V'*c.
         """
+        #  Should change this to use the physics_to_H module
+        #     H2contrib = physics_to_H.GeometrizedDiffusionCoeffToH(D, Vprime)
+        #     H3contrib = physics_to_H.GeometrizedConvectionCoeffToH(c, Vprime):
         if self.isNonCartesian == True:
             H2contrib = self.Vprime * D
             H3contrib = -self.Vprime * c

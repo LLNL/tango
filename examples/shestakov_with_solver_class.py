@@ -1,6 +1,6 @@
 """Example for how to use tango to solve a turbulence and transport problem.
 
-Using a solver class
+Using a solver class, saving to a file, and using the analysis package to load the data and save a plot
 
 Here, the "turbulent flux" is specified analytically, using the example in the Shestakov et al. (2003) paper.
 This example is a nonlinear diffusion equation with specified diffusion coefficient and source.  There is a
@@ -28,7 +28,7 @@ def initialize_shestakov_problem():
     return (L, N, dx, x, nL, n_initialcondition)
 
 def initialize_parameters():
-    MaxIterations = 100
+    MaxIterations = 1000
     thetaparams = {'Dmin': 1e-5,
                    'Dmax': 1e13,
                    'dpdx_thresh': 10}
@@ -69,9 +69,9 @@ solver = tng.solver.solver(L, x, n, nL, t_array, MaxIterations, tol, ComputeAllH
 
 # set up data logger
 arrays_to_save = ['H2', 'H3', 'profile']
-databasename = 'shestakov_solution_data'
-solver.DataSaverHandler.initialize_datasaver(databasename, MaxIterations, arrays_to_save)
-logging.info("Preparing DataSaver to save files with prefix {}.".format(databasename))
+data_basename = 'shestakov_solution_data'
+solver.DataSaverHandler.initialize_datasaver(data_basename, MaxIterations, arrays_to_save)
+logging.info("Preparing DataSaver to save files with prefix {}.".format(data_basename))
 
 logging.info("Initialization complete.")
 
@@ -108,3 +108,7 @@ else:
 #plt.ylabel('rms error')
 #plt.plot(x, n-nss)
 #plt.ylim(ymin=0)
+filename = data_basename + "1.npz"
+Timestep = tng.analysis.TimestepData(filename)
+lastiter = Timestep.GetLastIteration()
+lastiter.PlotProfileAndStartingProfile(savename='solution.png')

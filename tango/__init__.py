@@ -4,4 +4,5 @@ from .lodestro_method import TurbulenceHandler
 from .HToMatrixFD import HToMatrix, solve
 from . import datasaver
 import solver
+import analysis
 #from .interfacegrids_gene import gridsinterface

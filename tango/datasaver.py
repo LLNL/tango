@@ -67,7 +67,8 @@ class dataSaver(object):
                 if self.counter==0:  
                     Npts = len(input_data[array_name])
                     self.data_all_iterations[array_name] = np.zeros((self.MaxIterations, Npts))
-                    
+                
+                # save the data into the container
                 self.data_all_iterations[array_name][self.counter, :] = input_data[array_name]
             
             self.counter += 1

@@ -61,9 +61,7 @@ class solver(object):
                 self.reached_end = True
         
         
-        # DATA SAVER STUFF        
-        
-        # Save some stuff   
+        # Data Saver: Save some stuff   
         errhistory_final = self.errhistory[0:self.l]
         one_off_data = {'x': self.x, 'profile_m': self.profile, 'profile_mminus1': self.profile_mminus1, 'errhistory': errhistory_final, 't': self.t, 'm': self.m}
         self.DataSaverHandler.add_one_off_data(one_off_data)
