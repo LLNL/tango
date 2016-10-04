@@ -149,7 +149,7 @@ def GeometrizedConvectionCoeffToH(c, Vprime):
     H3contrib = -Vprime * c
     return H3contrib
     
-def H2ToGeometrizedDiffusionCoeff(H2, Vprime):
+def HToGeometrizedDiffusionCoeff(H2, Vprime):
     """Convert the H2 coefficient into a "geometrized" diffusion coefficient.
     """
     D = H2 / Vprime
@@ -200,6 +200,20 @@ def GeometrizedConvectionCoeffToConvectionCoeff(c, gradpsisq):
     """
     vbar = c / np.sqrt(gradpsisq)
     return vbar
+    
+def HToDiffusivity(H2, Vprime, gradpsisq):
+    """Convert H2 coefficient to thermal diffusivity chi.
+    """
+    D = HToGeometrizedDiffusionCoeff(H2, Vprime)
+    chi = GeometrizedDiffusionCoeffToDiffusivity(D, gradpsisq)
+    return chi
+
+def HToConvectionCoeff(H3, Vprime, gradpsisq):
+    """Convert H3 coefficient to effective convection coefficient.
+    """
+    c = HToGeometrizedConvectionCoeff(H3, Vprime)
+    vbar = GeometrizedConvectionCoeffToConvectionCoeff(c, gradpsisq)
+    return vbar    
     
 def _dxCenteredDifference(u, dx):
     """Compute du/dx.

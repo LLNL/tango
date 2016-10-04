@@ -55,17 +55,19 @@ def test_SaveToFile():
     DataSaver.AddData(data, 1)
     DataSaver.AddData(data, 2)
     
-    DataSaver.SaveToFile('tempsave')
+    DataSaver.SaveToFile('testsave')
     
-    with np.load('tempsave.npz') as npzfile:
+    with np.load('testsave_timestep.npz') as npzfile:
     # check the one_off_data got saved and then check H2 H3
         assert np.all(npzfile['psi'] == psi)
         assert np.all(npzfile['Vprime'] == Vprime)
+    with np.load('testsave_iterations.npz') as npzfile:
         assert np.all(npzfile['H2'][1,:] == H2)
         assert np.all(npzfile['H3'][0,:] == H3)
     
     # teardown
-    os.remove('tempsave.npz')
+    os.remove('testsave_timestep.npz')
+    os.remove('testsave_iterations.npz')
 
 def test_ResetData():
     MaxIterations=15

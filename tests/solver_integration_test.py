@@ -1,4 +1,4 @@
-# integration test ---  test the solver class in tango
+# integration test ---  test the solver, datasaver modules in tango
 
 from __future__ import division
 import numpy as np
@@ -27,27 +27,30 @@ def test_solver_basic():
     testtol = 1e-3
     assert abs(obs - exp) < testtol
 
-def test_solver_single_files():
-    # test the use of solver class with data logger --- single file from single timestep
+def test_solver_single_timestep():
+    # test the use of solver class with data logger --- single timestep
     (L, N, dx, x, nL, n, MaxIterations, tol, turbhandler, t_array) = problem_setup()
     solver = tng.solver.solver(L, x, n, nL, t_array, MaxIterations, tol, ComputeAllH, turbhandler)
     
     # set up data logger
     arrays_to_save = ['H2', 'H3', 'profile']
-    databasename = 'shestakov_solution_data'
+    databasename = 'test_integration_data'
     solver.DataSaverHandler.initialize_datasaver(databasename, MaxIterations, arrays_to_save)
     while solver.ok:
         # Implicit time advance: iterate to solve the nonlinear equation!
         solver.TakeTimestep()
         
     n = solver.profile
-    datasavename = databasename + "1.npz"
-    with np.load(datasavename) as npzfile:
-        n_loaded = npzfile['profile'][-1,:]   # last row corresponds to last iteration
+    datasavename_timestep = databasename + "1_timestep.npz"
+    datasavename_iterations = databasename + "1_iterations.npz"
+    with np.load(datasavename_timestep) as npzfile:
         n_current = npzfile['profile_m']
+    with np.load(datasavename_iterations) as npzfile:
+        n_loaded = npzfile['profile'][-1,:]   # last row corresponds to last iteration
     assert(np.allclose(n, n_loaded, rtol=0, atol=1e-15))
     assert(np.allclose(n, n_current, rtol=0, atol=1e-15))
-    os.remove(datasavename)
+    os.remove(datasavename_timestep)
+    os.remove(datasavename_iterations)
 
 def test_solver_multiple_files():
     # test the use of solver class with data logger --- multiple files from multiple timesteps
@@ -57,7 +60,7 @@ def test_solver_multiple_files():
     
     # set up data logger
     arrays_to_save = ['H2', 'H3', 'profile']
-    databasename = 'shestakov_solution_data'
+    databasename = 'test_integration_data'
     solver.DataSaverHandler.initialize_datasaver(databasename, MaxIterations, arrays_to_save)
     while solver.ok:
         # Implicit time advance: iterate to solve the nonlinear equation!
@@ -65,17 +68,19 @@ def test_solver_multiple_files():
         
     n = solver.profile  # finished solution
     
-    datasavename1 = databasename + "1.npz"
-    datasavename2 = databasename + "2.npz"
-    with np.load(datasavename1) as npzfile:
+    datasavename1_iterations = databasename + "1_iterations.npz"
+    datasavename2_timestep = databasename + "2_timestep.npz"
+    with np.load(datasavename1_iterations) as npzfile:
         H2 = npzfile['H2']
         (temp, H2N) = np.shape(H2)
-    with np.load(datasavename2) as npzfile:
+    with np.load(datasavename2_timestep) as npzfile:
         n_loaded = npzfile['profile_m']
     assert N == H2N
     assert(np.allclose(n, n_loaded, rtol=0, atol=1e-15))
-    os.remove(datasavename1)
-    os.remove(datasavename2)
+    os.remove(datasavename1_iterations)
+    os.remove(databasename + "1_timestep.npz")
+    os.remove(datasavename2_timestep)
+    os.remove(databasename + "2_iterations.npz")
 
 def test_solver_not_converging():
     # test that data is stored even when solution does not converge within MaxIterations
@@ -85,20 +90,21 @@ def test_solver_not_converging():
     
     # set up data logger
     arrays_to_save = ['H2', 'H3', 'profile']
-    databasename = 'shestakov_solution_data'
+    databasename = 'test_integration_data'
     solver.DataSaverHandler.initialize_datasaver(databasename, MaxIterations, arrays_to_save)
     while solver.ok:
         # Implicit time advance: iterate to solve the nonlinear equation!
         solver.TakeTimestep()
         
     n = solver.profile
-    datasavename = databasename + "1.npz"
-    with np.load(datasavename) as npzfile:
+    datasavename_timestep = databasename + "1_timestep.npz"
+    with np.load(datasavename_timestep) as npzfile:
         n_loaded = npzfile['profile_m']
         iteration_number = npzfile['iteration_number']
     assert(np.allclose(n, n_loaded, rtol=0, atol=1e-15))
     assert len(iteration_number) == MaxIterations
-    os.remove(datasavename)
+    os.remove(datasavename_timestep)
+    os.remove(databasename + "1_iterations.npz")
     
 #==============================================================================
 #    End of tests.  Below are helper functions used by the tests

@@ -97,13 +97,25 @@ class dataSaver(object):
         return z
     
     def SaveToFile(self, filename):
-        """Save the requested data to a file as individual arrays.
+        """Save the requested data to files as individual arrays.
+        
+        Save two files: 
+          The first file (ending in _timestep) is for the data that is constant throughout the timestep
+          (e.g., x or psi) or for 0D data that changes on iterations (e.g., rms error)
+          
+          The second file (ending in _iterations) is for the 1D data that changes each iteration
+          (e.g., H2, profile)
         """
         if self.finalized == False:
             self._FinalizeData()
-            datatosave = self._merge_two_dicts(self.one_off_data, self.data_all_iterations)
-            datatosave['iteration_number'] = self.iteration_number
-            np.savez(filename, **datatosave)
+            # save data whole-timestep data
+            filename_timestep = filename + "_timestep"
+            self.one_off_data['iteration_number'] = self.iteration_number
+            np.savez(filename_timestep, **self.one_off_data)
+            
+            # save 1D data that changes each iteration
+            filename_iterations = filename + "_iterations"
+            np.savez(filename_iterations, **self.data_all_iterations)
         else:
             print("Object is in finalized state.  Cannot save.")
         

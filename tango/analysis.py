@@ -14,35 +14,34 @@ Module for performing data analysis on saved files
 
         
 class TimestepData(object):
-    def __init__(self, filename):
-        data = LoadNPZFile(filename)
+    def __init__(self, basename):
+        data_timestep = LoadNPZFile(basename + "_timestep")
+        data_iterations = LoadNPZFile(basename + "_iterations")
         
-        # data for the whole timestep--should always be there
-            # scalars (saved as 0 dimensional arrays)
-        self.m = data['m']
-        self.t = data['t']
-            # arrays
-        self.iteration_number = data['iteration_number']   # array
-        self.errhistory = data['errhistory']
-        self.x = data['x']
-        self.profile_m = data['profile_m']
-        self.profile_mminus1 = data['profile_mminus1']
-        
-        self.whole_timestep_keys = ['m', 't', 'iteration_number', 'errhistory', 'x', 'profile_m', 'profile_mminus1']
+        # data for the whole timestep
+        for varname in data_timestep:
+            setattr(self, varname, data_timestep[varname])
 
-        # store all data from all iterations        
-        self.data = data
+        # also, store the dicts
+        self.data_timestep = data_timestep     
+        self.data_iterations = data_iterations
     def GetFirstIteration(self):
-        return IterationData(0, self.data, self.whole_timestep_keys)
+        return IterationData(0, self.data_timestep, self.data_iterations)
         pass
     def GetLastIteration(self):
         Niters = len(self.iteration_number)
-        return IterationData(Niters-1, self.data, self.whole_timestep_keys)
+        return IterationData(Niters-1, self.data_timestep, self.data_iterations)
 
     def GetNthIteration(self, N):
-        return IterationData(N, self.data, self.whole_timestep_keys)
+        return IterationData(N, self.data_timestep, self.data_iterations)
     
     ################################################################
+    ## Accessors to retrieve available data
+    @property
+    def psi(self):
+        """Alias to accessing x"""
+        return self.x
+    
     ### Plotting Routines
     def PlotErrhistory(self, savename=None):
         """Plot the self-consistency error vs. iteration number for this timestep.
@@ -58,142 +57,84 @@ class TimestepData(object):
         
 
 class IterationData(object):
-    def __init__(self, iteration_counter, data, whole_timestep_keys):
+    def __init__(self, iteration_counter, data_timestep, data_iterations):
         """Create an object to represent the data from a single iteration.
         
         Inputs:
           iteration_counter     iteration to retrieve data from (integer)
-          data                  data that is output and saved by tango (dict)
-          whole_timestep_keys   list of strings of keys to dict data that represent information about the timestep
-                                  as a whole rather than a single iteration
+          data_timestep         constant or 0D data that may change each iteration (dict)
+          data_iterations       1D array data that changes each iteration (dict)
         """
         self.iteration_counter = iteration_counter 
+        self.data_timestep = data_timestep
         # data for the whole timestep--should always be there
             # scalars
-        self.m = data['m']
-        self.t = data['t']
-        self.l = data['iteration_number'][iteration_counter]   #
-        self.err = data['errhistory'][iteration_counter]
-            # arrays
-        self.x = data['x']
-        self.profile_mminus1 = data['profile_mminus1']
+        for varname in data_timestep:
+            # special handling for iteration_number and errhistory where we want a particular iteration from the history
+            if varname == 'iteration_number':
+                self.l = data_timestep['iteration_number'][iteration_counter]
+            elif varname == 'errhistory':
+                self.err = data_timestep['errhistory'][iteration_counter]
+            else:  # save everything else
+                setattr(self, varname, data_timestep[varname])
+       
         
         self.data = {}
-        
-        #data for the whole timestep -- that might be there
-        
-        
-        # store all data from the specified iteration
-        for varname in data:
-            if varname not in whole_timestep_keys: # in this loop, only store variables that change per iteration
-                self.data[varname] = data[varname][iteration_counter, :]
+        # store all 1D data from the specified iteration 
+        for varname in data_iterations:
+            self.data[varname] = data_iterations[varname][iteration_counter, :]
+            # also save into self as an attribute for direct access
+            setattr(self, varname, self.data[varname])
 
-    def _SaveInternallyIfPresent(self, data, key):
         
+    def AvailableTimestepFields(self):
+        """return a list of all data for the whole timestep"""
+        timestep_fields = self.data_timestep.keys()
+        if 'iteration_number' in timestep_fields:
+            timestep_fields.remove('iteration_number')
+            timestep_fields.append('l')
+        if 'errhistory' in timestep_fields:
+            timestep_fields.remove('errhistory')
+            timestep_fields.append('err')
+        return timestep_fields
         
     def AvailableSolutionFields(self):
+        """Return a list of all attributes in solution data that is available (data that changes each iteration)"""
         return self.data.keys()
+    
+    def AllAvailableFields(self):
+        """return a list of all attributes, excluding internal attributes, dicts, and methods.
+        
+        This list is almost identical to the union of AvailableTimestepFields and AvailableSolutionFields."""
+        return [key for key, value in self.__dict__.items() if not key.startswith("__") and not type(value) is dict and not callable(value)]
     
     ## Accessors to retrieve available data
     @property
     def psi(self):
         """Alias to accessing x"""
         return self.x
-    @property
-    def profile(self):
-        key = 'profile'
-        return self.ReturnDataFromKey(key)
-    @property
-    def H1(self):
-        key = 'H1'
-        return self.ReturnDataFromKey(key)
-    @property
-    def H2(self):
-        key = 'H2'
-        return self.ReturnDataFromKey(key)
-    @property
-    def H3(self):
-        key = 'H3'
-        return self.ReturnDataFromKey(key)
-    @property
-    def H4(self):
-        key = 'H4'
-        return self.ReturnDataFromKey(key)
-    @property
-    def H6(self):
-        key = 'H6'
-        return self.ReturnDataFromKey(key)
-    @property
-    def H7(self):
-        key = 'H7'
-        return self.ReturnDataFromKey(key)
-    @property
-    def A(self):
-        key = 'A'
-        return self.ReturnDataFromKey(key)
-    @property
-    def B(self):
-        key = 'B'
-        return self.ReturnDataFromKey(key)
-    @property
-    def C(self):
-        key = 'C'
-        return self.ReturnDataFromKey(key)
-    @property
-    def f(self):
-        key = 'f'
-        return self.ReturnDataFromKey(key)
-    @property
-    def D(self):
-        key = 'D'
-        return self.ReturnDataFromKey(key)
-    @property
-    def c(self):
-        key = 'c'
-        return self.ReturnDataFromKey(key)
-    @property
-    def profile_turbgrid(self):
-        key = 'profile_turbgrid'
-        return self.ReturnDataFromKey(key)
-    @property
-    def profileEWMA_turbgrid(self):
-        key = 'profileEWMA_turbgrid'
-        return self.ReturnDataFromKey(key)
-    @property
-    def flux_turbgrid(self):
-        key = 'flux_turbgrid'
-        return self.ReturnDataFromKey(key)
-    @property
-    def fluxEWMA_turbgrid(self):
-        key = 'fluxEWMA_turbgrid'
-        return self.ReturnDataFromKey(key)
-    @property
-    def D_turbgrid(self):
-        key = 'D_turbgrid'
-        return self.ReturnDataFromKey(key)
-    @property
-    def c_turbgrid(self):
-        key = 'c_turbgrid'
-        return self.ReturnDataFromKey(key)
-    @property
-    def Dhat_turbgrid(self):
-        key = 'Dhat_turbgrid'
-        return self.ReturnDataFromKey(key)
-    @property
-    def chat_turbgrid(self):
-        key = 'chat_turbgrid'
-        return self.ReturnDataFromKey(key)
-    @property
-    def theta_turbgrid(self):
-        key = 'theta_turbgrid'
-        return self.ReturnDataFromKey(key)
     
-    def ReturnDataFromKey(self, key):
-        if key in self.data:
-            return self.data[key]
-        else:
-            print "variable " + key + " is not available"
-            raise KeyError
+    ################################################################
+    ### Data Analysis Routines
+    def GeometrizedDiffusionCoefficient(self):
+        D = physics_to_H.HToGeometrizedDiffusionCoeff(self.H2, self.Vprime)
+        return D
+    
+    def DiffusionCoefficient(self):
+        chi = physics_to_H.HToDiffusivity(self.H2, self.Vprime, self.gradpsisq)
+        return chi
+        
+    def GeometrizedConvectionCoefficient(self):
+        c = physics_to_H.HToGeometrizedConvectionCoeff(self.H3, self.Vprime)
+        return c
+        
+    def ConvectionCoefficient(self):
+        vbar = physics_to_H.HToConvectionCoeff(self.H3, self.Vprime, self.gradpsisq)
+        return vbar
+    
+    ################################################################
+    ### Analysis routines for data on the GENE grid
+    ####
     
     ################################################################
     ### Plotting Routines
@@ -224,8 +165,8 @@ def LoadNPZFile(input_filename):
     
     Note that when numpy loads an npz file, it uses a lazy form of loading, where the storage for a specific
     variable is not retrieved until that variable is accessed.  For very large files, this can save time.
-    For simplicity, and because the files for Tango are not expected to be that large (less than ~1 GB), this
-    routine loads all variables into memory in a new dict.
+    Here, for simplicity, and because the files for Tango are not expected to be that large (less than ~1 GB),
+    this routine loads all variables into memory in a new dict.
     
     Inputs:
       input_filename    name of .npz file with output from tango (string)
