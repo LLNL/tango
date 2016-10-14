@@ -2,6 +2,7 @@
 
 from __future__ import division
 import numpy as np
+import logging
 
 class dataSaverHandler(object):
     """convenient interface to a dataSavers."""
@@ -111,11 +112,19 @@ class dataSaver(object):
             # save data whole-timestep data
             filename_timestep = filename + "_timestep"
             self.one_off_data['iteration_number'] = self.iteration_number
+            
+            logging.info("Saving timestep data to {}.npz".format(filename_timestep))
             np.savez(filename_timestep, **self.one_off_data)
+            logging.info("... Saved!")
             
             # save 1D data that changes each iteration
-            filename_iterations = filename + "_iterations"
-            np.savez(filename_iterations, **self.data_all_iterations)
+            if self.data_all_iterations != {}:
+                filename_iterations = filename + "_iterations"
+                logging.info("Saving iterations data to {}.npz".format(filename_iterations))
+                np.savez(filename_iterations, **self.data_all_iterations)
+                logging.info("... Saved!")
+            else:
+                logging.info("Not saving any iterations data for this timestep.")
         else:
             print("Object is in finalized state.  Cannot save.")
         

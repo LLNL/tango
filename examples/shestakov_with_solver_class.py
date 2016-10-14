@@ -108,7 +108,7 @@ else:
 #plt.ylabel('rms error')
 #plt.plot(x, n-nss)
 #plt.ylim(ymin=0)
-filename = data_basename + "1.npz"
+filename = data_basename + "1"
 Timestep = tng.analysis.TimestepData(filename)
 lastiter = Timestep.GetLastIteration()
 lastiter.PlotProfileAndStartingProfile(savename='solution.png')

@@ -50,7 +50,9 @@ class TurbulenceHandler(object):
                             the documentation as psi] (scalar)
               lmparams    parameters to be used by the lodestro method (dict)
                             --> EWMA_param_turbflux, EWMA_param_profile, thetaparams
-              FluxModel   object with a GetFlux() method
+              FluxModel   object with a GetFlux() method that provides turbulent flux
+                             GetFlux() accepts the profile on the turbulence grid and returns
+                             the turbulent flux on the turbulence grid
               grids       (optional) object for transforming the profiles and transport coefficients
                             between the transport grid and the grid used to compute turbulent fluxes
                                 default: None [same grid for transport and turbulence]

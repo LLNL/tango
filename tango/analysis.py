@@ -34,9 +34,24 @@ class TimestepData(object):
 
     def GetNthIteration(self, N):
         return IterationData(N, self.data_timestep, self.data_iterations)
+        
+    def Profile_NthIteration(self, N):
+        """Provide a shortcut to returning the Nth iteration of the profile without having to instantiate an Iteration object
+        """
+        return self.data_iterations['profile'][N, :]
+        
+        
     
     ################################################################
     ## Accessors to retrieve available data
+    def AvailableTimestepFields(self):
+        """return a list of all data for the whole timestep"""
+        return self.data_timestep.keys()
+    
+    def AvailableSolutionFields(self):
+        """Return a list of all attributes in solution data that is available (data that changes each iteration)"""
+        return self.data_iterations.keys()
+    
     @property
     def psi(self):
         """Alias to accessing x"""

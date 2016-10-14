@@ -3,7 +3,7 @@
 from __future__ import division, absolute_import
 import numpy as np
 import logging
-import tango as tng
+from . import HToMatrixFD
 from . import datasaver
 
 """
@@ -35,6 +35,7 @@ class solver(object):
         self.l = None                                         # Iteration index
         self.converged = None
         self.errhistory = np.zeros(self.MaxIterations)      # error history vs. iteration at a given timestep
+        self.errhistory_final = None
         self.t_final = t_array[-1]
         self.m = 0                                            # Timestep index
         self.reached_end = False
@@ -62,8 +63,11 @@ class solver(object):
         
         
         # Data Saver: Save some stuff   
-        errhistory_final = self.errhistory[0:self.l]
-        one_off_data = {'x': self.x, 'profile_m': self.profile, 'profile_mminus1': self.profile_mminus1, 'errhistory': errhistory_final, 't': self.t, 'm': self.m}
+        self.errhistory_final = self.errhistory[0:self.l]
+        EWMAparam_turbflux = self.turbhandler.LoDestroMethod._EWMAturbflux.EWMA_param
+        EWMAparam_profile = self.turbhandler.LoDestroMethod._EWMAprofile.EWMA_param
+        one_off_data = {'x': self.x, 'profile_m': self.profile, 'profile_mminus1': self.profile_mminus1, 'errhistory': self.errhistory_final, 't': self.t, 'm': self.m,
+                        'EWMAparam_turbflux':EWMAparam_turbflux,  'EWMAparam_profile':EWMAparam_profile}
         self.DataSaverHandler.add_one_off_data(one_off_data)
         self.DataSaverHandler.save_to_file(self.m)
         self.DataSaverHandler.reset_for_next_timestep()
@@ -74,15 +78,15 @@ class solver(object):
         (H1, H2, H3, H4, H6, H7, extraturbdata) = self.ComputeAllH(self.t, self.x, self.profile, self.turbhandler)
         
         # compute matrix system (A, B, C, f)
-        (A, B, C, f) = tng.HToMatrix(self.dt, self.dx, self.profile_rightBC, self.profile_mminus1, H1, H2=H2, H3=H3, H4=H4, H6=H6, H7=H7)
+        (A, B, C, f) = HToMatrixFD.HToMatrix(self.dt, self.dx, self.profile_rightBC, self.profile_mminus1, H1, H2=H2, H3=H3, H4=H4, H6=H6, H7=H7)
 
         self.converged, rms_error, resid = self.CheckConvergence(A, B, C, f, self.profile, self.tol)
         self.errhistory[self.l] = rms_error
         
         # compute new iterate of profile
-        self.profile = tng.solve(A, B, C, f)
+        self.profile = HToMatrixFD.solve(A, B, C, f)
         
-        logging.info("Timestep m={}: after iteration number l={}, first 4 entries of profile={};  last 4 entries={}".format(
+        logging.debug("Timestep m={}: after iteration number l={}, first 4 entries of profile={};  last 4 entries={}".format(
             self.m, self.l, self.profile[:4], self.profile[-4:]))
         
         # save data if desired
