@@ -64,18 +64,18 @@ class solver(object):
         
         # Data Saver: Save some stuff   
         self.errhistory_final = self.errhistory[0:self.l]
-        EWMAparam_turbflux = self.turbhandler.LoDestroMethod._EWMAturbflux.EWMA_param
-        EWMAparam_profile = self.turbhandler.LoDestroMethod._EWMAprofile.EWMA_param
-        one_off_data = {'x': self.x, 'profile_m': self.profile, 'profile_mminus1': self.profile_mminus1, 'errhistory': self.errhistory_final, 't': self.t, 'm': self.m,
+        (EWMAparam_turbflux, EWMAparam_profile) = self.turbhandler.get_EWMA_params()
+        
+        timestepData = {'x': self.x, 'profile_m': self.profile, 'profile_mminus1': self.profile_mminus1, 'errhistory': self.errhistory_final, 't': self.t, 'm': self.m,
                         'EWMAparam_turbflux':EWMAparam_turbflux,  'EWMAparam_profile':EWMAparam_profile}
-        self.DataSaverHandler.add_one_off_data(one_off_data)
+        self.DataSaverHandler.add_one_off_data(timestepData)
         self.DataSaverHandler.save_to_file(self.m)
         self.DataSaverHandler.reset_for_next_timestep()
         self.profile_mminus1 = self.profile
 
     def ComputeNextIteration(self):
         # compute H's from current iterate of profile
-        (H1, H2, H3, H4, H6, H7, extraturbdata) = self.ComputeAllH(self.t, self.x, self.profile, self.turbhandler)
+        (H1, H2, H3, H4, H6, H7, extraturbdata) = self.ComputeAllH(self.t, self.x, self.profile)
         
         # compute matrix system (A, B, C, f)
         (A, B, C, f) = HToMatrixFD.HToMatrix(self.dt, self.dx, self.profile_rightBC, self.profile_mminus1, H1, H2=H2, H3=H3, H4=H4, H6=H6, H7=H7)

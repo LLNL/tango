@@ -2,6 +2,7 @@
 
 from __future__ import division
 import numpy as np
+from . import derivatives
 
 """
 lodestro_method
@@ -110,6 +111,16 @@ class TurbulenceHandler(object):
                 'D_turbgrid': D_turbgrid, 'c_turbgrid': c_turbgrid,
                 'Dhat_turbgrid': Dcdata_turbgrid['D_hat'], 'chat_turbgrid': Dcdata_turbgrid['c_hat'], 'theta_turbgrid': Dcdata_turbgrid['theta']}
         return (H2contrib, H3contrib, data)
+    
+    def get_EWMA_params(self):
+        """Return the EWMA parameter for turbulent flux and the profile, respectively.
+
+        Outputs:
+          EWMAparam_turbflux    (scalar)
+          EWMAparam_profile     (scalar)
+        """
+        (EWMAparam_turbflux, EWMAparam_profile) = self.LoDestroMethod.get_EWMA_params()
+        return (EWMAparam_turbflux, EWMAparam_profile)
         
         
         
@@ -190,6 +201,17 @@ class lm(object):
         (D, c, data) = self._FluxSplitter.FluxToTransportCoeffs(flux, p, dx)
         return (D, c, data)
         
+    def get_EWMA_params(self):
+        """Return the EWMA parameter for turbulent flux and the profile, respectively.
+
+        Outputs:
+          EWMAparam_turbflux    (scalar)
+          EWMAparam_profile     (scalar)
+        """
+        EWMAparam_turbflux = self._EWMAturbflux.EWMA_param 
+        EWMAparam_profile = self._EWMAprofile.EWMA_param
+        return (EWMAparam_turbflux, EWMAparam_profile)
+        
         
 class FluxSplit(object):
     """Class for splitting a flux into diffusive and convective contributions.  Any averaging to be applied to the flux or
@@ -268,7 +290,7 @@ class FluxSplit(object):
           |grad psi|^2.  It is absorbed into the effective diffusive coefficient D returned by this function.  Note the dimensions of D
           are different than the dimensions of D2 if |grad psi|^2 is not dimensionless.       
         """
-        dpdx = self._dxCenteredDifference(p, dx)
+        dpdx = derivatives.dx_centered_difference(p, dx)
         D_hat = -flux / dpdx
         D_hat[dpdx==0] = 0     # get rid of infinities resulting from divide by zero
         c_hat = flux / p
@@ -316,24 +338,6 @@ class FluxSplit(object):
         
         assert np.count_nonzero(np.logical_and(theta>=0, theta<=1)) == np.size(theta), 'some theta is not between 0 and 1'
         return theta
-    
-    @staticmethod
-    def _dxCenteredDifference(u, dx):
-        """Compute du/dx.
-          du/dx is computed using centered differences on the same grid as u.  For the edge points, one-point differences are used.
-        
-        Inputs:
-          u         profile (array)
-          dx        grid spacing (scalar)
-        
-        Outputs:
-          dudx      (array, same length as u)
-        """
-        dudx = np.zeros_like(u, dtype=float)
-        dudx[0] = (u[1] - u[0]) / dx
-        dudx[1:-1] = (u[2:] - u[:-2]) / (2*dx)
-        dudx[-1] = (u[-1] - u[-2]) / dx
-        return dudx
     
         
 class EWMA(object):

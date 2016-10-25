@@ -4,14 +4,6 @@ from __future__ import division
 import numpy as np
 from tango import lodestro_method
 
-def test_dxCenteredDifference():
-    dx = 0.4
-    u = np.array([2, 3, 7, 5, -3, 2, 8])
-    dudx = lodestro_method.FluxSplit._dxCenteredDifference(u, dx)
-    obs = dudx
-    exp = np.array([5/2, 25/4, 5/2, -25/2, -15/4, 55/4, 15])
-    assert(np.allclose(obs, exp, rtol=0, atol=1e-13))
-
 def test_ComputeNextEWMA():
     EWMA_param = 0.12
     yEWMA_lminus1 = 7.1

@@ -1,7 +1,7 @@
 """test_HToMatrixFD.py
 
 Simple diffusion equation with constant diffusion coefficient -- solve in "one iteration" with large timestep to steady state
-  tests the H2 and H7
+  tests H1, H2, H3, and H7
 """
 
 from __future__ import division

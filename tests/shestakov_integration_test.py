@@ -1,4 +1,5 @@
 # integration test ---  test the LoDestro Method and solvers on the analytic Shestakov problem
+#  NOT using the solver class in tango
 
 from __future__ import division
 import numpy as np

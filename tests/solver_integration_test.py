@@ -8,8 +8,8 @@ import os
 
 def test_solver_basic():
     # test the use of solver class
-    (L, N, dx, x, nL, n, MaxIterations, tol, turbhandler, t_array) = problem_setup()
-    solver = tng.solver.solver(L, x, n, nL, t_array, MaxIterations, tol, ComputeAllH, turbhandler)
+    (L, N, dx, x, nL, n, MaxIterations, tol, turbhandler, compute_all_H, t_array) = problem_setup()
+    solver = tng.solver.solver(L, x, n, nL, t_array, MaxIterations, tol, compute_all_H, turbhandler)
     
     # set up data logger
     while solver.ok:
@@ -29,8 +29,8 @@ def test_solver_basic():
 
 def test_solver_single_timestep():
     # test the use of solver class with data logger --- single timestep
-    (L, N, dx, x, nL, n, MaxIterations, tol, turbhandler, t_array) = problem_setup()
-    solver = tng.solver.solver(L, x, n, nL, t_array, MaxIterations, tol, ComputeAllH, turbhandler)
+    (L, N, dx, x, nL, n, MaxIterations, tol, turbhandler, compute_all_H, t_array) = problem_setup()
+    solver = tng.solver.solver(L, x, n, nL, t_array, MaxIterations, tol, compute_all_H, turbhandler)
     
     # set up data logger
     arrays_to_save = ['H2', 'H3', 'profile']
@@ -54,9 +54,9 @@ def test_solver_single_timestep():
 
 def test_solver_multiple_files():
     # test the use of solver class with data logger --- multiple files from multiple timesteps
-    (L, N, dx, x, nL, n, MaxIterations, tol, turbhandler, t_array) = problem_setup()
+    (L, N, dx, x, nL, n, MaxIterations, tol, turbhandler, compute_all_H, t_array) = problem_setup()
     t_array = np.array([0, 1.0, 1e4])
-    solver = tng.solver.solver(L, x, n, nL, t_array, MaxIterations, tol, ComputeAllH, turbhandler)
+    solver = tng.solver.solver(L, x, n, nL, t_array, MaxIterations, tol, compute_all_H, turbhandler)
     
     # set up data logger
     arrays_to_save = ['H2', 'H3', 'profile']
@@ -84,9 +84,9 @@ def test_solver_multiple_files():
 
 def test_solver_not_converging():
     # test that data is stored even when solution does not converge within MaxIterations
-    (L, N, dx, x, nL, n, MaxIterations, tol, turbhandler, t_array) = problem_setup()
+    (L, N, dx, x, nL, n, MaxIterations, tol, turbhandler, compute_all_H, t_array) = problem_setup()
     MaxIterations = 100  # takes 170 iterations to converge for these parameters
-    solver = tng.solver.solver(L, x, n, nL, t_array, MaxIterations, tol, ComputeAllH, turbhandler)
+    solver = tng.solver.solver(L, x, n, nL, t_array, MaxIterations, tol, compute_all_H, turbhandler)
     
     # set up data logger
     arrays_to_save = ['H2', 'H3', 'profile']
@@ -115,8 +115,9 @@ def problem_setup():
     MaxIterations, lmparams, tol = initialize_parameters()
     FluxModel = shestakov_nonlinear_diffusion.shestakov_analytic_fluxmodel(dx)
     turbhandler = tng.TurbulenceHandler(dx, lmparams, FluxModel)
+    compute_all_H = ComputeAllH(turbhandler)
     t_array = np.array([0, 1e4])  # specify the timesteps to be used.
-    return (L, N, dx, x, nL, n, MaxIterations, tol, turbhandler, t_array)
+    return (L, N, dx, x, nL, n, MaxIterations, tol, turbhandler, compute_all_H, t_array)
     
 
 def initialize_shestakov_problem():
@@ -142,11 +143,14 @@ def initialize_parameters():
     tol = 1e-11  # tol for convergence... reached when a certain error < tol
     return (MaxIterations, lmparams, tol)
 
-def ComputeAllH(t, x, n, turbhandler):
-    # Define the contributions to the H coefficients for the Shestakov Problem
-    H1 = np.ones_like(x)
-    H7 = shestakov_nonlinear_diffusion.H7contrib_Source(x)
-    (H2, H3, extradata) = turbhandler.Hcontrib_TurbulentFlux(n)
-    H4 = None
-    H6 = None
-    return (H1, H2, H3, H4, H6, H7, extradata)
+class ComputeAllH(object):
+    def __init__(self, turbhandler):
+        self.turbhandler = turbhandler
+    def __call__(self, t, x, n):
+        # Define the contributions to the H coefficients for the Shestakov Problem
+        H1 = np.ones_like(x)
+        H7 = shestakov_nonlinear_diffusion.H7contrib_Source(x)
+        (H2, H3, extradata) = self.turbhandler.Hcontrib_TurbulentFlux(n)
+        H4 = None
+        H6 = None
+        return (H1, H2, H3, H4, H6, H7, extradata)

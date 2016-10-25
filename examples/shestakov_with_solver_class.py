@@ -40,14 +40,17 @@ def initialize_parameters():
     tol = 1e-11  # tol for convergence... reached when a certain error < tol
     return (MaxIterations, lmparams, tol)
 
-def ComputeAllH(t, x, n, turbhandler):
-    # Define the contributions to the H coefficients for the Shestakov Problem
-    H1 = np.ones_like(x)
-    H7 = shestakov_nonlinear_diffusion.H7contrib_Source(x)
-    (H2, H3, extradata) = turbhandler.Hcontrib_TurbulentFlux(n)
-    H4 = None
-    H6 = None
-    return (H1, H2, H3, H4, H6, H7, extradata)
+class ComputeAllH(object):
+    def __init__(self, turbhandler):
+        self.turbhandler = turbhandler
+    def __call__(self, t, x, n):
+        # Define the contributions to the H coefficients for the Shestakov Problem
+        H1 = np.ones_like(x)
+        H7 = shestakov_nonlinear_diffusion.H7contrib_Source(x)
+        (H2, H3, extradata) = self.turbhandler.Hcontrib_TurbulentFlux(n)
+        H4 = None
+        H6 = None
+        return (H1, H2, H3, H4, H6, H7, extradata)
     
 #==============================================================================
 #  MAIN STARTS HERE
@@ -65,10 +68,11 @@ turbhandler = tng.TurbulenceHandler(dx, lmparams, FluxModel)
 
 t_array = np.array([0, 1e4])  # specify the timesteps to be used.
 
-solver = tng.solver.solver(L, x, n, nL, t_array, MaxIterations, tol, ComputeAllH, turbhandler)
+compute_all_H = ComputeAllH(turbhandler)
+solver = tng.solver.solver(L, x, n, nL, t_array, MaxIterations, tol, compute_all_H, turbhandler)
 
 # set up data logger
-arrays_to_save = ['H2', 'H3', 'profile']
+arrays_to_save = ['H2', 'H3', 'profile']  # for list of possible arrays, see solver._pkgdata()
 data_basename = 'shestakov_solution_data'
 solver.DataSaverHandler.initialize_datasaver(data_basename, MaxIterations, arrays_to_save)
 logging.info("Preparing DataSaver to save files with prefix {}.".format(data_basename))
