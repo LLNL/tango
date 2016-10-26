@@ -3,6 +3,7 @@
 from __future__ import division
 import numpy as np
 from . import physics
+from . import derivatives
 """
 PhysicsToH
 
@@ -28,8 +29,11 @@ class Hcontrib_TransportPhysics(object):
     """Provide an interface to computing the contributions to the H coefficients from
     physical effects in the transport equation other than turbulence.
     """
-    def __init__(self, profiles_all):
-        self.profiles_all = profiles_all
+    def __init__(self, profilesAll):
+        self.transportPhysics = physics.TransportPhysics(profilesAll)
+        self.profilesAll = profilesAll
+        self.Vprime = profilesAll.Vprime
+        self.gradpsisq = profilesAll.gradpsisq
     def Hcontrib_thermal_diffusivity(self, chi):
         """Compute the contributions to the H coefficients in the transport equation due to a specified
         ion thermal diffusivity.
@@ -40,55 +44,83 @@ class Hcontrib_TransportPhysics(object):
            H2contrib    array
            H3contrib    array
         """
-        n = self.profiles_all.n
-        psi = self.profiles_all.psi
-        Vprime = self.profiles_all.Vprime
-        gradpsisq = self.profiles_all.gradpsisq
+        n = self.profilesAll.n
+        psi = self.profilesAll.psi
+        Vprime = self.Vprime
+        gradpsisq = self.gradpsisq
         
         dpsi = psi[1] - psi[0]
-        dndpsi = _dxCenteredDifference(n, dpsi)
-        (H2contrib, H3contrib) = ThermalDiffusivityToH(chi, Vprime, gradpsisq, n, dndpsi)
-    def Hcontrib_neoclassical_thermal_diffusivity(self):
+        dndpsi = derivatives.dx_centered_difference(n, dpsi)
+        (H2contrib, H3contrib) = thermal_diffusivity_to_H(chi, Vprime, gradpsisq, n, dndpsi)
+        return (H2contrib, H3contrib)
+        
+    def Hcontrib_neoclassical_thermal_diffusivity(self, P):
         """Compute the contributions to the H coefficients in the transport equation due to neoclassical
         ion thermal diffusivity.
         
         Inputs:
-           ()
+           P            new ion pressure profile (array) [SIDE EFFECT: stores P internally as the new pressure]
         Outputs:
            H2contrib    array
            H3contrib    array
         """
-        chi = physics.neoclassical_chi()
+        chi = self.transportPhysics.neoclassical_chi(P)
         (H2contrib, H3contrib) = self.Hcontrib_thermal_diffusivity(chi)
         return (H2contrib, H3contrib)
         
-    def UpdatePressure(self, P):
-        self.profiles_all.P = P
+    def update_pressure(self, PNew):
+        self.profilesAll.P = PNew
+        self.transportPhysics.update_pressure(PNew)
+        
+    def time_derivative_to_H(self, timeDerivativeCoeff):
+        """Convert the time derivative coefficient to the H1 coefficient
+        """
+        H1contrib = time_derivative_to_H(timeDerivativeCoeff, self.Vprime)
+        return H1contrib
+    
+    def source_to_H(self, S):
+        """Convert an input source term (on the RHS) to the H7 coefficient.
+        Inputs:
+          S             Source term (array)
+          Vprime        Geometric coefficient dV/dpsi (scalar or array)
+        Outputs:
+          H7contrib     contribution to H7 (array)    
+        """
+        H7contrib = source_to_H(S, self.Vprime)
+        return H7contrib
 
 
 
-
-
-
-
-def SourceToH(S, Vprime):
+def source_to_H(S, Vprime):
     """Convert an input source term (on the RHS) to the H7 coefficient.
+    Inputs:
+      S             Source term (array)
+      Vprime        Geometric coefficient dV/dpsi (scalar or array)
+    Outputs:
+      H7contrib     contribution to H7 (array)    
     """
-    H7contrib = -S * Vprime
+    
+    H7contrib = S * Vprime
     return H7contrib
 
-def PDepHeatingToH(Pheating, Vprime):
+def PDep_heating_to_H(Pheating, Vprime):
     """Convert a P-dependent heating source, e.g., a term Pheating*P on the RHS of (1) to the H6 coefficient
+    
+    Inputs:
+      Pheating      Heating proportionality coefficient (array)
+      Vprime        Geometric coefficient dV/dpsi (scalar or array)
+    Outputs:
+      H6contrib     contribution to H6 (array)
     """
-    H6contrib = - Pheating * Vprime
+    H6contrib = Pheating * Vprime
     return H6contrib
-def TimeDerivativeToH(time_derivative_coeff, Vprime):
+def time_derivative_to_H(timeDerivativeCoeff, Vprime):
     """Convert the time derivative coefficient to the H1 coefficient
     """
-    H1contrib = time_derivative_coeff * Vprime
+    H1contrib = timeDerivativeCoeff * Vprime
     return H1contrib
 
-def ThermalDiffusivityToH(chi, Vprime, gradpsisq, n, dndpsi):
+def thermal_diffusivity_to_H(chi, Vprime, gradpsisq, n, dndpsi):
     """Convert a thermal diffusivity chi to the H coefficients.
     
     Add diffusivity in the form of a diffusive heat flux,
@@ -96,6 +128,7 @@ def ThermalDiffusivityToH(chi, Vprime, gradpsisq, n, dndpsi):
     or more precisely,
          <q dot grad psi> = -n * chi * <grad T dot grad psi>
                           = -n * chi * dT/dpsi * <|grad psi|^2>
+    Since our dependent variable is pressure, not temperature, this becomes
                           = -chi <|grad psi|^2> dp/dpsi + chi <|grad psi|^2> * 1/n * dn/dpsi * p
     The result is returned in the form of the H2, H3 coefficients to specify the transport equation.  This requires
     multiplying by V'(psi), another geometric coefficient.
@@ -119,7 +152,7 @@ def ThermalDiffusivityToH(chi, Vprime, gradpsisq, n, dndpsi):
     H3contrib = -Vprime * chi * gradpsisq / n * dndpsi
     return (H2contrib, H3contrib)
     
-def GeometrizedDiffusionCoeffToH(D, Vprime):
+def geometrized_diffusion_coeff_to_H(D, Vprime):
     """Convert a "geometrized diffusion coefficient" into an H coefficient.
     
     A geometrized diffusion coefficient D is defined as follows:
@@ -134,7 +167,7 @@ def GeometrizedDiffusionCoeffToH(D, Vprime):
     H2contrib = Vprime * D
     return H2contrib
 
-def GeometrizedConvectionCoeffToH(c, Vprime):
+def geometrized_convection_coeff_to_H(c, Vprime):
     """Convert a "geometrized convection coefficient" into an H coefficient.
     
     A geometrized convection coefficient c is defined as follows:
@@ -148,20 +181,26 @@ def GeometrizedConvectionCoeffToH(c, Vprime):
     """
     H3contrib = -Vprime * c
     return H3contrib
+
+###############################################################
+#  End functions for converting from physics-based coefficients to H coefficients
+
+#  Begin functions for converting from H coefficients to physics-based coefficients
+###############################################################
     
-def HToGeometrizedDiffusionCoeff(H2, Vprime):
+def H_to_geometrized_diffusion_coeff(H2, Vprime):
     """Convert the H2 coefficient into a "geometrized" diffusion coefficient.
     """
     D = H2 / Vprime
     return D
 
-def HToGeometrizedConvectionCoeff(H3, Vprime):
+def H_to_geometrized_convection_coeff(H3, Vprime):
     """Convert the H3 coefficient into a "geometrized convection coefficient.
     """
     c = -H3 / Vprime
     return c
     
-def GeometrizedDiffusionCoeffToDiffusivity(D, gradpsisq):
+def geometrized_diffusion_coeff_to_diffusivity(D, gradpsisq):
     """Convert a "geometrized diffusion coefficient" into a diffusivity that has dimensions of
     Length^2/Time.
     
@@ -172,7 +211,7 @@ def GeometrizedDiffusionCoeffToDiffusivity(D, gradpsisq):
     chi = D / gradpsisq
     return chi
     
-def GeometrizedConvectionCoeffToConvectionCoeff(c, gradpsisq):
+def geometrized_convection_coeff_to_convection_coeff(c, gradpsisq):
     """Convert a "geometrized convection coefficient" into a convection coefficient that has dimensions
     of Length/Time.
     
@@ -201,33 +240,16 @@ def GeometrizedConvectionCoeffToConvectionCoeff(c, gradpsisq):
     vbar = c / np.sqrt(gradpsisq)
     return vbar
     
-def HToDiffusivity(H2, Vprime, gradpsisq):
+def H_to_diffusivity(H2, Vprime, gradpsisq):
     """Convert H2 coefficient to thermal diffusivity chi.
     """
-    D = HToGeometrizedDiffusionCoeff(H2, Vprime)
-    chi = GeometrizedDiffusionCoeffToDiffusivity(D, gradpsisq)
+    D = H_to_geometrized_diffusion_coeff(H2, Vprime)
+    chi = geometrized_diffusion_coeff_to_diffusivity(D, gradpsisq)
     return chi
 
 def HToConvectionCoeff(H3, Vprime, gradpsisq):
     """Convert H3 coefficient to effective convection coefficient.
     """
-    c = HToGeometrizedConvectionCoeff(H3, Vprime)
-    vbar = GeometrizedConvectionCoeffToConvectionCoeff(c, gradpsisq)
-    return vbar    
-    
-def _dxCenteredDifference(u, dx):
-    """Compute du/dx.
-      du/dx is computed using centered differences on the same grid as u.  For the edge points, one-point differences are used.
-    
-    Inputs:
-      u         profile (array)
-      dx        grid spacing (scalar)
-    
-    Outputs:
-      dudx      (array, same length as u)
-    """
-    dudx = np.zeros_like(u, dtype=float)
-    dudx[0] = (u[1] - u[0]) / dx
-    dudx[1:-1] = (u[2:] - u[:-2]) / (2*dx)
-    dudx[-1] = (u[-1] - u[-2]) / dx
-    return dudx
+    c = H_to_geometrized_convection_coeff(H3, Vprime)
+    vbar = geometrized_convection_coeff_to_convection_coeff(c, gradpsisq)
+    return vbar

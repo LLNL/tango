@@ -10,86 +10,134 @@ physics
 Module for dealing with other (non-turbulent) transport physics that contribute to the transport equation
 """
 
+# physical constants with module-wide-scope.  Given in SI units
+e = 1.60217662e-19          # electron charge
+mp = 1.6726219e-27          # proton mass
+eps0 = 8.85418782e-12       # permittivity of free space
 
-
-
-class transportPhysics(object):
-    def __init__(self, profiles_all):
-        self.profiles_all = profiles_all
-    def neoclassical_chi(self):
+class TransportPhysics(object):
+    def __init__(self, profilesAll):
+        self.profilesAll = profilesAll
+    def neoclassical_chi(self, P):
         """to be filled in
         Uses a simple model for neoclassical ion thermal diffusivity.  Chi is computed from local
         parameters.
         
         Inputs:
-          ()
+          P         new ion pressure profile (array) [SIDE EFFECT: stores P internally as the new pressure]
         Outputs:
-          chi       ion thermal diffusivity (array)
+          chi       ion thermal diffusivity due to neoclassical effects on radial grid (array)
         """
-        pass          
+        #n, T, mu, Z = (1,1,1,1)  # fill in based on internal representation of profiles
+        #B_pi2, qbar, aR0, psi = (1,1 1, 1)      # fill in
+        self.update_pressure(P)
+        
+        n = self.profilesAll.n
+        T = self.profilesAll.Ti
+        mu = self.profilesAll.mu
+        Z = self.profilesAll.Z
+        B_pi2 = self.profilesAll.B_pi2
+        qbar = self.profilesAll.qbar
+        aR0 = self.profilesAll.aR0
+        psi = self.profilesAll.psi
+        gradpsisq = self.profilesAll.gradpsisq
+        
+        # compute intermediate parameters
+        epsilon = psi * aR0     # epsilon = r/R0 = r/a * a/R0 (inverse aspect ratio)
+        m = mu * mp
+        Omega_pi2 = Z * e * B_pi2 / m
+        nuB = nu_Braginskii(n, T, mu, Z)
+        
+        # compute sigma
+        sigma = neoclassical_sigma(mu, T, nuB, Omega_pi2, qbar, epsilon)
+        
+        # compute diffusivity chi from sigma
+        chi = sigma_to_chi(sigma, gradpsisq)
+        return chi
+        
+    def update_pressure(self, PNew):
+        """Update the internal profiles with a new pressure
+        """
+        self.profilesAll.P = PNew
+        
     
-
-class Profiles_All(object):
-    """Interface to the profiles.  Also contains some basic information
-    relating to the profiles -- species mass, charge number, etc.
+def neoclassical_sigma(mu, T, nuB, Omega_pi2, qbar, epsilon):
+    """Compute the neoclassical heat transport coefficient sigma.
     
-    For now, assume the species is singly charged...
+    Here, sigma is calculated for the *banana regime* only, in a formula applicable to concentric circular surfaces
+    where psi=r.  The present formula accounts for ion-ion collisions of a single species.  This formula is not
+    invariant to a coordinate transform to arbitrary flux coordinate.
     
-    Internally, store the plasma density (same for ion & electron), the ion
-    pressure, and the electron temperature.  Ion temperature can be derived
+    First, we define sigma_p through
+            
+            (1)     <q dot grad psi_p> = -sigma_p * n * dT/dpsi_p
+            
+    where psi_p is the poloidal flux divided by 2*pi.  sigma_p is given by [See Parker 2012]
+            
+            (2)     sigma_p = I^2 T nu_B g(eps) / (m_i Omega_pi2^2)
+            
+    where g(epsilon) is a dimensionless geometric coefficient in terms of epsilon=r/R0.  However, Equation (1) is not 
+    invariant to coordinate transform for psi_p to an arbitrary flux coordinate psi.  One can quickly see that
+    for a different coordinate psi, one obtains
+            
+            (3)     <q dot grad psi> = -sigma_p * n * (dpsi / dpsi_p)^2 * dT/dpsi
     
-    Assume SI units...
+    Finally, we define sigma in a particular flux coordinate system through
+    
+            (4)     <q dot grad psi> = -sigma * n * dT/dpsi
+            
+    Hence, we have
+    
+            (5)     sigma = sigma_p * (dpsi / dpsi_p)^2
+    
+    For the special case of concentric circular magnetic geometry, using the flux coordinate psi = r, and using the
+    geometry in the form written in Lapillone (2009), one finds dpsi / dpsi_p = qbar / (r*B0).  Then one can cast
+    Equation (5) into
+    
+            (6)     sigma = -1/epsilon^2 * g(eps) * T * nuB * qbar^2 / (m_i * Omega_pi2^2)
+          
+    Note, the formula for sigma blows up near r=0 or epsilon=0 due to the factor of 1/epsilon^2.  This is fine; the
+    total heat flux <q dot grad psi> goes to zero at r=0, as it must, because dT/dr -> 0.
+          
+    Inputs: [IN SI UNITS]
+      mu            ion mass measured in proton masses (scalar)
+      T             ion temperature (measured in energy) on radial grid (array)
+      nuB           Braginskii ion-ion collision frequency on radial grid (array)
+      Omega_pi2     ion cyclotron frequency at theta=pi/2 on radial grid (array)
+      qbar          coefficient related to safety factor in specification of magnetic geometry on radial grid (array)
+      epsilon       radial position r/R0 on radial grid (array)
+    
+    Outputs: [IN SI UNITS]
+      sigma         neoclassical heat transport coefficient in radial coordinates
+    
+    See Parker and Catto, Plasma Phys. Control. Fusion, Variational calculation of neoclassical ion heat flux and
+        poloidal flow in the banana regime for axisymmetric magnetic geometry. (2014)
     """
-    def __init__(self, mu, n, Ti, Te, psi, a, R0, I, Bpi2, Vprime, gradpsisq):
-        """Initialize the profiles object.
-        
-        Note, ion *temperature*, not *pressure*, is used to initialize.
-        Note, the electron temperature is assumed fixed and unchanging
-        
-        Inputs:
-          mu:       ion mass (in proton masses) (scalar)
-          n:        plasma density (array)
-          Ti:       ion temperature (array)
-          Te:       electron temperature (array)
-          psi:      psi grid (array)
-          a:        minor radius (scalar)
-          R0:       major radius (scalar)
-          I:        magnetic flux function I(psi) = R B_phi (array)
-          Bpi2:     magnetic field strength at theta=pi/2 on each flux surface (array)
-          Vprime:   V' = dV/dpsi (array)
-          gradpsisq: <|grad psi|^2> (array)
-        """
-        self.proton_mass = 1.6726219e-27 # in kg
-        self.e = 1.60217662e-19 # electron charge
-        self.mu = mu
-        self.m = self.proton_mass * mu
-        self.a = a
-        self.R0 = R0
-        self.aR0 = a/R0
-        self.Z = 1
-        
-        self.n = n
-        self.P = n*Ti
-        self.Te = Te
-        self.I = I
-        self.Bpi2 = Bpi2
-        self.psi = psi
-        self.Vprime = Vprime
-        self.gradpsisq = gradpsisq
-        
-    @property
-    def Ti(self):
-        return self.P / self.n
-    def IonTemperatureIneV(self):
-        return self.Ti/self.e
-    def AsDict(self):
-        """
-        Return profile data as a dict
-        """
-        profiles_all = {'mu': self.mu, 'a': self.a, 'R0': self.R0,
-                        'n': self.n, 'Te': self.Te,
-                        'Vprime': self.Vprime, 'gradpsisq': self.gradpsisq}
-        return profiles_all
+    m = mu * mp
+    
+    g = 1.34*epsilon**(1/2) + 2.60*epsilon - 2.13*epsilon**(3/2) + 3.18*epsilon**2  # Ref: Parker and Catto (2012) - Variational calculation of neoclassical ion heat flux...
+    # g = 2*epsilon**(1/2) * (0.66 + 1.88*epsilon**(1/2) - 1.54*epsilon) * (1 + 3/2*epsilon**2) # Ref: Chang-Hinton formula simplified to banana regime
+    #  the Parker & Chang-Hinton formulae are nearly identical for 0 <= epsilon <= 1
+    sigma = (1/epsilon**2) * g * T * nuB * qbar**2 / (m * Omega_pi2**2)
+    return sigma
+
+def sigma_to_chi(sigma, gradpsisq):
+    """convert neoclassical sigma to chi", where chi is defined as
+    
+            <q dot grad psi> = -n * chi * dT/dpsi * <|grad psi|^2>
+    Hence, the relationship is 
+    
+            chi = sigma / <|grad psi|^2>
+    
+    Inputs:
+      sigma         neoclassical heat transport coefficient (array)
+      gradpsisq     <|grad psi|^2> (scalar or array)
+    Outputs:
+      chi           thermal diffusivity coefficient (array)
+    """
+    chi = sigma / gradpsisq
+    return chi
+
 
 def Mockup_trapezoidal_chi(psi1, psi2, chi_max, psi):
     """Create a diffusivity chi in the same of a trapezoid on the grid psi.
@@ -129,24 +177,6 @@ ______ /   .
     pass  
 
 
-def _dxCenteredDifference(u, dx):
-    """Compute du/dx.
-      du/dx is computed using centered differences on the same grid as u.  For the edge points, one-point differences are used.
-    
-    Inputs:
-      u         profile (array)
-      dx        grid spacing (scalar)
-    
-    Outputs:
-      dudx      (array, same length as u)
-    """
-    dudx = np.zeros_like(u, dtype=float)
-    dudx[0] = (u[1] - u[0]) / dx
-    dudx[1:-1] = (u[2:] - u[:-2]) / (2*dx)
-    dudx[-1] = (u[-1] - u[-2]) / dx
-    return dudx
-
-
 # need to change the input argument
 def CollisionalEnergyExchange(Profiles):
     """Contribution to linear equation for new iteration from the collisional energy exchange term in the ion pressure equation.
@@ -161,7 +191,6 @@ def CollisionalEnergyExchange(Profiles):
     ne = n    
     
     logLambda = 10
-    e = 1.60217662e-19 # electron charge
     Te_ineV = Te/e      # convert from J to eV
     
     # Reference: NRL formulary.  Gives result in s^-1
@@ -185,17 +214,15 @@ def nu_Braginskii(n, T, mu, Z):
     """Calculate the Braginskii ion-ion collision frequency.  This is used in
     the ion neoclassical heat flux
     
-     Inputs:
+     Inputs: [IN SI UNITS]
         n: ion density
         T: ion temperature
         mu: ion mass (measured in proton masses)
         Z: ion charge number
         
-     For now, assume log Lambda = 10
+     For now, assume log Lambda = 10.  For now, everything is assumed to be in SI units.
      
-     For now, everything is assumed to be in SI units.
-     
-      Outputs:
+      Outputs: [IN SI UNITS]
        nuB_ii: the computed collision frequency
      
      Vectorized: If n & T are arrays corresponding to different positions, then
@@ -204,27 +231,98 @@ def nu_Braginskii(n, T, mu, Z):
     
     # constants
     logLambda = 10
-    e = 1.60217662e-19 # electron charge
-    mp = 1.6726219e-27 # protos mass
     m = mu*mp
-    
-    nuB_ii = 4 * np.pi * Z**4 * e**4 * n * logLambda / (3 * np.sqrt(m) * T**(3/2))
+    nuB_ii = 4 * np.pi * Z**4 * e**4 / (4*np.pi*eps0)**2 * n * logLambda / (3 * np.sqrt(m) * T**(3/2))
     return nuB_ii
+
+
+class ProfilesAll(object):
+    """Interface to the profiles.  Also contains some basic information
+    relating to the profiles -- species mass, charge number, etc.
+    
+    For now, assume the species is singly charged...
+    
+    Internally, store the plasma density (same for ion & electron), the ion
+    pressure, and the electron temperature.  Ion temperature can be derived
+    
+    Assume SI units...
+    """
+    def __init__(self, mu, n, psi, a, R0, B_pi2, qbar, Vprime, gradpsisq):
+        """Initialize the profiles object.
+        
+        Note, ion *temperature*, not *pressure*, is used to initialize.
+        Note, the electron temperature is assumed to be equal to ion temperature.
+        
+        Inputs:
+          mu:       ion mass (in proton masses) (scalar)
+          n:        plasma density (array)
+          psi:      psi grid (array)
+          a:        minor radius (scalar)
+          R0:       major radius (scalar)
+          B_pi2:    magnetic field strength at theta=pi/2 on each flux surface (array)
+          qbar:     coefficient related to safety factor in specification of magnetic geometry (array)
+          Vprime:   V' = dV/dpsi (array)
+          gradpsisq: <|grad psi|^2> (array)
+        """
+        self.proton_mass = 1.6726219e-27 # in kg
+        self.e = 1.60217662e-19 # electron charge
+        self.mu = mu
+        self.m = self.proton_mass * mu
+        self.a = a
+        self.R0 = R0
+        self.aR0 = a/R0
+        self.Z = 1
+        self.n = n
+        self.P = None # gets updated
+        self.B_pi2 = B_pi2
+        self.qbar = qbar
+        self.psi = psi
+        self.Vprime = Vprime
+        self.gradpsisq = gradpsisq
+        
+    @property
+    def Ti(self):
+        return self.P / self.n
+    def IonTemperatureIneV(self):
+        return self.Ti/self.e
+#    def AsDict(self):
+#        """
+#        Return profile data as a dict
+#        """
+#        profilesAll = {'mu': self.mu, 'a': self.a, 'R0': self.R0,
+#                        'n': self.n, 'Te': self.Te,
+#                        'Vprime': self.Vprime, 'gradpsisq': self.gradpsisq}
+#        return profilesAll
+        
+
+def initialize_profile_defaults(mu, n, psi):
+    """Create and return an instance of ProfilesAll.
+    
+    Inputs:
+      mu     ion mass measured in proton masses (scalar)
+      n      plasma density on radial grid (array)
+      psi    1d array of containing grid points psi = r/a (array)
+    """
+    (B0, B_pi2, a, R0, qbar, Vprime, gradpsisq) = magnetic_geometry_circular(psi)
+    
+    profilesAll = ProfilesAll(mu, n, psi, a, R0, B_pi2, qbar, Vprime, gradpsisq)
+    return profilesAll
     
     
-def MagneticGeometryCircular(psi):
+def magnetic_geometry_circular(psi):
     """Set up the model magnetic geometry used in various GENE studies.  This
      involves concentric circular flux surfaces.
      
      Inputs:
          psi    1d array of containing grid points psi = r/a
      Outputs: [stored in dict geom]
-         I          magnetic I(psi) = R B_phi
-         Bpi2       magnetic field strength at theta=pi/2 on each flux surface
-         a          minor radius
-         R0         major radius on axis
-         Vprime     dV/dpsi, where V = volume within flux surface psi
-         gradpsisq  |grad psi|^2
+         B0         magnetic field parameter B0 in specification of analytic geometry (scalar)
+         B_pi2       magnetic field strength |B| at theta=pi/2 on radial grid (array)
+         a          minor radius (scalar)
+         R0         major radius on axis (scalar)
+         qbar       coefficient related to safety factor (array)
+         Vprime     dV/dpsi, where V = volume within flux surface psi (array)
+         gradpsisq  |grad psi|^2 (array)
          
     
     Reference: X. Lapillonne et al. (2009) - Clarification to limitations of
@@ -244,22 +342,9 @@ def MagneticGeometryCircular(psi):
     B0 = 1
     a = 0.5
     
-    I = R0*B0 * np.ones_like(psi) # I= R B_phi is independent ofpsi
-    
     qbar = 0.854 + 2.184 * psi**2
-    Bpi2 = B0 * np.sqrt(1 + (psi*a/(R0*qbar))**2)
+    B_pi2 = B0 * np.sqrt(1 + (psi*a/(R0*qbar))**2)
     
     Vprime = (2 * np.pi)**2 * R0 * a * psi
-    gradpsisq = 1 
-    
-    # set up a dictionary to store outputs
-    geom = {}
-    geom['R0'] = R0
-    geom['B0'] = B0
-    geom['a'] = a
-    geom['I'] = I
-    geom['Bpi2'] = Bpi2
-    geom['Vprime'] = Vprime
-    geom['gradpsisq'] = gradpsisq
-
-    return geom
+    gradpsisq = np.ones_like(Vprime)
+    return (B0, B_pi2, a, R0, qbar, Vprime, gradpsisq)
