@@ -35,7 +35,7 @@ class TurbulenceHandler(object):
     Since the class provides the H coefficients, and not simply diffusion coefficients, it must
     be aware of the coordinate geometric factor V' = dV/dpsi.
     """
-    def __init__(self, dx, lmparams, FluxModel, grids=None, Vprime=None):
+    def __init__(self, dx, x, lmparams, FluxModel, grids=None, Vprime=None):
         """A geometric factor Vprime may be optionally provided to the constructor.  This 
             geometric factor is essentially a Jacoabian and appears in transport equations
             in non-Cartesian geometry.  It typically appears in the form
@@ -49,6 +49,7 @@ class TurbulenceHandler(object):
             Inputs:
               dx          grid spacing for independent variable x [sometimes referred to in
                             the documentation as psi] (scalar)
+              x           independent variable x on the transport grid
               lmparams    parameters to be used by the lodestro method (dict)
                             --> EWMA_param_turbflux, EWMA_param_profile, thetaparams
               FluxModel   object with a GetFlux() method that provides turbulent flux
@@ -56,11 +57,13 @@ class TurbulenceHandler(object):
                              the turbulent flux on the turbulence grid
               grids       (optional) object for transforming the profiles and transport coefficients
                             between the transport grid and the grid used to compute turbulent fluxes
+                            See interfacegrids_gene.py
                                 default: None [same grid for transport and turbulence]
               Vprime      (optional) geometric coefficients dV/dpsi depending on coordinate system (array)
-                                default: None [V'=1]
+                                default: None [V'=1 everywhere]
         """
         self.dx = dx
+        self.x = x
         self.LoDestroMethod = lm(lmparams['EWMA_param_turbflux'], lmparams['EWMA_param_profile'], lmparams['thetaparams'])
         
         self.FluxModel = FluxModel
@@ -71,7 +74,7 @@ class TurbulenceHandler(object):
             assert hasattr(grids, 'MapTransportCoeffsOntoTransportGrid') and callable(getattr(grids, 'MapTransportCoeffsOntoTransportGrid'))
             self.grids = grids
         else:
-            self.grids = grids_DoNothing()
+            self.grids = grids_DoNothing(x)
         
         if Vprime is not None:
             self.Vprime = Vprime
@@ -105,7 +108,10 @@ class TurbulenceHandler(object):
         (H2contrib, H3contrib) = self.DcToHcontrib(D, c)
         
         # Other data that may be useful for debugging or data analysis purposes
-        data = {'D': D, 'c': c,
+        x = self.grids.get_x_transport_grid()        
+        x_turbgrid = self.grids.get_x_turbulence_grid()
+        data = {'x': x, 'x_turbgrid': x_turbgrid,
+                'D': D, 'c': c,
                 'profile_turbgrid': profile_turbgrid, 'profileEWMA_turbgrid': profileEWMA_turbgrid,
                 'flux_turbgrid': flux_turbgrid, 'fluxEWMA_turbgrid': fluxEWMA_turbgrid,
                 'D_turbgrid': D_turbgrid, 'c_turbgrid': c_turbgrid,
@@ -122,8 +128,12 @@ class TurbulenceHandler(object):
         (EWMAparam_turbflux, EWMAparam_profile) = self.LoDestroMethod.get_EWMA_params()
         return (EWMAparam_turbflux, EWMAparam_profile)
         
+    def set_ewma_iterates(self, profileEWMA, turbfluxEWMA):
+        """See lm.set_ewma_iterates() for details.
         
-        
+        Useful for restoring Tango from a checkpoint.
+        """
+        self.LoDestroMethod.set_ewma_iterates(profileEWMA, turbfluxEWMA)
         
     def DcToHcontrib(self, D, c):
         """Transform the effective diffusion coefficient D and effective convective velocity c
@@ -211,7 +221,17 @@ class lm(object):
         EWMAparam_turbflux = self._EWMAturbflux.EWMA_param 
         EWMAparam_profile = self._EWMAprofile.EWMA_param
         return (EWMAparam_turbflux, EWMAparam_profile)
+    
+    def set_ewma_iterates(self, profileEWMA, turbfluxEWMA):
+        """Set the EWMA iterates for both the profile and turbulent flux.
         
+        Inputs:
+          profileEWMA   New EWMA iterate for the profile (array)
+          turbfluxEWMA  New EWMA iterate for the turbulent flux (array)
+        """
+        self._EWMAprofile.set_ewma_iterate(profileEWMA)
+        self._EWMAturbflux.set_ewma_iterate(turbfluxEWMA)
+    
         
 class FluxSplit(object):
     """Class for splitting a flux into diffusive and convective contributions.  Any averaging to be applied to the flux or
@@ -383,13 +403,22 @@ class EWMA(object):
         return EWMA_param * y_l  +  (1-EWMA_param) * yEWMA_lminus1
         
     def ResetEWMAIterate(self):
-        self._EWMA_lminus1 = None
+        self._yEWMA_lminus1 = None
+    
+    def set_ewma_iterate(self, yEWMA):
+        self._yEWMA_lminus1 = yEWMA
         
 class grids_DoNothing(object):
     """Placeholder class for moving between grids when the turbulence grid will be the same as the transport grid.
     No interpolation of quantities between grids will be performed, as there is only one grid.
     """
+    def __init__(self, x):
+        self.x = x
     def MapProfileOntoTurbGrid(self, profile):
         return profile
     def MapTransportCoeffsOntoTransportGrid(self, D, c):
-        return (D, c)    
+        return (D, c)
+    def get_x_transport_grid(self):
+        return self.x
+    def get_x_turbulence_grid(self):
+        return self.x

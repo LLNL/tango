@@ -29,7 +29,7 @@ def test_lodestro_shestakovproblem():
                 'thetaparams': thetaparams}
                 
     FluxModel = shestakov_nonlinear_diffusion.shestakov_analytic_fluxmodel(dx)
-    turbhandler = lodestro_method.TurbulenceHandler(dx, lmparams, FluxModel)
+    turbhandler = lodestro_method.TurbulenceHandler(dx, x, lmparams, FluxModel)
     
     # initial condition
     n = 1 - 0.5*x

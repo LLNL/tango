@@ -3,8 +3,10 @@
 from .lodestro_method import TurbulenceHandler
 from .HToMatrixFD import HToMatrix, solve
 from . import datasaver
-import solver
-import analysis
-import physics
-import physics_to_H
+from . import solver
+from . import analysis
+from . import physics
+from . import physics_to_H
+from . import interfacegrids_gene
+from . import gene_startup
 #from .interfacegrids_gene import gridsinterface

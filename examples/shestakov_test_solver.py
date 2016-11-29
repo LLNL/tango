@@ -69,7 +69,7 @@ MaxIterations, lmparams, tol = initialize_parameters()
 
            
 FluxModel = shestakov_nonlinear_diffusion.shestakov_analytic_fluxmodel(dx)
-turbhandler = tng.TurbulenceHandler(dx, lmparams, FluxModel)
+turbhandler = tng.TurbulenceHandler(dx, x, lmparams, FluxModel)
 errhistory = np.zeros(MaxIterations-1)      # error history vs. iteration at a given timestep
 t = np.array([0, 1e4])  # specify the timesteps to be used.
 n_mminus1 = n           # initialize "m minus 1" variables for the first timestep

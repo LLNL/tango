@@ -30,6 +30,7 @@ class GridInterface_TangoOutside(object):
     necessary.
     """
     def __init__(self, psi_tango, psi_gene):
+        assert psi_tango[-1] >= psi_gene[-1]
         self.psi_tango = psi_tango  # values of flux coordinate psi on tango's grid
         self.psi_gene = psi_gene    # values of psi on gene's grid
     def MapProfileOntoTurbGrid(self, profile_tango):
@@ -65,6 +66,10 @@ class GridInterface_TangoOutside(object):
         """
         f_tango = ExtendWithZeros_BothSides(self.psi_gene, f_gene, self.psi_tango, enforcePositive=enforcePositive)
         return f_tango
+    def get_x_transport_grid(self):
+        return self.psi_tango
+    def get_x_turbulence_grid(self):
+        return self.psi_gene
 
 class GridInterface_TangoInside(object):
     """Class for interacing Tango's grid and GENE's grid where at the outer boundary, GENE's grid
@@ -72,7 +77,7 @@ class GridInterface_TangoInside(object):
       radially inward farther than GENE's.
     
     Mapping a profile from the transport grid onto GENE's grid: On the inward side where Tango's domain
-    is larger, we can use a simple interpolating spline.On the outward side, Tango's profile is
+    is larger, we can use a simple interpolating spline.  On the outward side, Tango's profile is
     extrapolated.
     
     Mapping transport coefficients from GENE's grid to Tango's grid: we first resample the transport
@@ -80,6 +85,7 @@ class GridInterface_TangoInside(object):
     necessary.
     """
     def __init__(self, psi_tango, psi_gene):
+        assert psi_gene[-1] >= psi_tango[-1]
         self.psi_tango = psi_tango  # values of flux coordinate psi on tango's grid
         self.psi_gene = psi_gene    # values of psi on gene's grid
     def MapProfileOntoTurbGrid(self, profile_tango):
@@ -112,6 +118,10 @@ class GridInterface_TangoInside(object):
         """
         f_tango = ExtendWithZeros_LeftSide(self.psi_gene, f_gene, self.psi_tango, enforcePositive=enforcePositive)
         return f_tango
+    def get_x_transport_grid(self):
+        return self.psi_tango
+    def get_x_turbulence_grid(self):
+        return self.psi_gene
         
 class GridInterface_TangoInside_fixedoutside(object):
     """Similar to GridInterface_TangoInside.  But instead of linearly extrapolating Tango's profile on the outward side,
@@ -134,6 +144,10 @@ class GridInterface_TangoInside_fixedoutside(object):
     def MapToTransportGrid(self, f_gene, enforcePositive=False):
         f_tango = ExtendWithZeros_LeftSide(self.psi_gene, f_gene, self.psi_tango, enforcePositive=enforcePositive)
         return f_tango
+    def get_x_transport_grid(self):
+        return self.psi_tango
+    def get_x_turbulence_grid(self):
+        return self.psi_gene
         
 
 def ExtendWithZeros_BothSides(x_small, f_small, x_large, enforcePositive=False):
