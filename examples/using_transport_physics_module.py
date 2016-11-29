@@ -20,7 +20,7 @@ def initialize_diffusion_problem():
     N = 500         # number of spatial grid points
     dr = L / (N - 0.5)  # spatial grid size
     r = np.linspace(dr/2, L, N)   # location corresponding to grid points j=0, ..., N-1
-    pL = 1600
+    pL = 1
     # initial conditions
     p_initialcondition = 0.3*np.sin(np.pi * r) + pL * r
     
@@ -87,14 +87,19 @@ L, N, dr, r, nL, p, D = initialize_diffusion_problem()
 
 MaxIterations, lmparams, tol = initialize_parameters()
 FluxModel = shestakov_nonlinear_diffusion.shestakov_analytic_fluxmodel(dr)
-turbhandler = tng.TurbulenceHandler(dr, lmparams, FluxModel)
+turbhandler = tng.TurbulenceHandler(dr, r, lmparams, FluxModel)
 
 # initialize transport module: profiles (with a slight modification to set Vprime to psi=r/a)
 mu = 1
 n = 1e19 * np.ones_like(r) # density
 psi = r     # dr to 1
 
-profilesAll = tng.physics.initialize_profile_defaults(mu, n, psi)
+minorRadius = 1
+majorRadius = 1
+B0 = 1
+Vprime = r
+gradPsiSq = np.ones_like(r)
+profilesAll = tng.physics.initialize_profile_defaults(mu, n, psi, minorRadius, majorRadius, B0, Vprime, gradPsiSq)
 HcontribTransportPhysics = tng.physics_to_H.Hcontrib_TransportPhysics(profilesAll)
 
 

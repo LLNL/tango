@@ -2,6 +2,7 @@
 
 from __future__ import division
 import numpy as np
+from . import parameters
 
 
 """
@@ -10,7 +11,7 @@ physics
 Module for dealing with other (non-turbulent) transport physics that contribute to the transport equation
 """
 
-# physical constants with module-wide-scope.  Given in SI units
+# physical constants with module-wide scope.  Given in SI units
 e = 1.60217662e-19          # electron charge
 mp = 1.6726219e-27          # proton mass
 eps0 = 8.85418782e-12       # permittivity of free space
@@ -295,56 +296,47 @@ class ProfilesAll(object):
 #        return profilesAll
         
 
-def initialize_profile_defaults(mu, n, psi):
+def initialize_profile_defaults(ionMass, density, r, minorRadius, majorRadius, B0, Vprime, gradPsiSq):
     """Create and return an instance of ProfilesAll.
     
     Inputs:
-      mu     ion mass measured in proton masses (scalar)
-      n      plasma density on radial grid (array)
-      psi    1d array of containing grid points psi = r/a (array)
+      ionMass       ion mass measured in proton masses (scalar)
+      density       plasma density on radial grid (array)
+      r             radial grid in coordinate r, measured in m (array)
+      minorRadius   minor radius a, measured in m (scalar)
+      majorRadius   major radius R0, measured in m (scalar)
+      B0            magnetic field parameter B0 in specification of analytic geometry.  Measured in Tesla (scalar)
+      Vprime        geometric coefficient V' = dV/dr (array)
+      gradPsiSq     geometric coefficient <|grad psi|^2>, where psi=r (array)
     """
-    (B0, B_pi2, a, R0, qbar, Vprime, gradpsisq) = magnetic_geometry_circular(psi)
-    
-    profilesAll = ProfilesAll(mu, n, psi, a, R0, B_pi2, qbar, Vprime, gradpsisq)
+    B_pi2 = magnetic_geometry_circular(r, minorRadius, majorRadius, B0)
+    qbar = parameters.analytic_safety_factor_qbar(r, minorRadius)
+    profilesAll = ProfilesAll(ionMass, density, r, minorRadius, majorRadius, B_pi2, qbar, Vprime, gradPsiSq)
     return profilesAll
     
     
-def magnetic_geometry_circular(psi):
+def magnetic_geometry_circular(r, a, R0, B0):
     """Set up the model magnetic geometry used in various GENE studies.  This
      involves concentric circular flux surfaces.
      
      Inputs:
-         psi    1d array of containing grid points psi = r/a
-     Outputs: [stored in dict geom]
-         B0         magnetic field parameter B0 in specification of analytic geometry (scalar)
-         B_pi2       magnetic field strength |B| at theta=pi/2 on radial grid (array)
-         a          minor radius (scalar)
-         R0         major radius on axis (scalar)
-         qbar       coefficient related to safety factor (array)
-         Vprime     dV/dpsi, where V = volume within flux surface psi (array)
-         gradpsisq  |grad psi|^2 (array)
-         
+         r          radial grid (array)
+         a          minor radius  (scalar)
+         R0         major radius (scalar)
+         B0         magnetic field parameter B0 in specification of analytic geometry.  Measured in Tesla (scalar)
+     Outputs:
+         B_pi2      magnetic field strength |B| at theta=pi/2 on radial grid.  Measured in Tesla (array)
     
-    Reference: X. Lapillonne et al. (2009) - Clarification to limitations of
-               the s-alpha equilibrium model
+    Reference: X. Lapillonne et al. (2009) - Clarification to limitations of the s-alpha equilibrium model
                
-    The Lapillonne paper uses psi = r/a = r_n
+    The Lapillonne paper uses r_n = r/a = r_n
     B = R0 B0 / R * (phi_hat + r/(R0*qbar) theta_hat)
     
     safety factor q related to qbar:
         q = qbar / sqrt(1- r^2 / R0^2)
         McMillan / Lapillonne uses q(rn) = (0.854 + 2.184 rn^2) / sqrt(1 - (rn a / R0)^2)
           i.e., qbar = 0.854 + 2.184 rn^2
-    """
-    
-    # set some initial parameters from which other quantities are derived
-    R0 = 1
-    B0 = 1
-    a = 0.5
-    
-    qbar = 0.854 + 2.184 * psi**2
-    B_pi2 = B0 * np.sqrt(1 + (psi*a/(R0*qbar))**2)
-    
-    Vprime = (2 * np.pi)**2 * R0 * a * psi
-    gradpsisq = np.ones_like(Vprime)
-    return (B0, B_pi2, a, R0, qbar, Vprime, gradpsisq)
+    """    
+    qbar = parameters.analytic_safety_factor_qbar(r, a)
+    B_pi2 = B0 * np.sqrt(1 + (r/(R0*qbar))**2)
+    return B_pi2
