@@ -5,6 +5,7 @@ import numpy as np
 import logging
 from . import HToMatrixFD
 from . import datasaver
+from . import handlers
 
 """
 solver
@@ -28,7 +29,10 @@ class solver(object):
         self.turbhandler = turbhandler
         
         # initialize other instance data
+        # DataSaverHandler and fileHandlerExecutor are two different ways of dealing with saving files on disk (and have different goals)
         self.DataSaverHandler = datasaver.dataSaverHandler()
+        self.fileHandlerExecutor = handlers.Executor()
+        
         self.solution_error = False
         self.t = 0
         self.dt = None        
@@ -53,7 +57,7 @@ class solver(object):
         # compute next iteration
         
         while self.l < self.MaxIterations and not self.converged and not self.solution_error:
-            self.ComputeNextIteration()
+            self.compute_next_iteration()
 
         if self.converged:            
             logging.info("Timestep m={}:  Converged!  Successfully found the solution for t={}.  Rms error={}.  Took {} iterations.".format(self.m, self.t, self.errhistory[self.l-1], self.l))
@@ -71,17 +75,20 @@ class solver(object):
         self.DataSaverHandler.add_one_off_data(timestepData)
         self.DataSaverHandler.save_to_file(self.m)
         self.DataSaverHandler.reset_for_next_timestep()
+        
+        self.fileHandlerExecutor.reset_handlers_for_next_timestep()
+        
         self.profile_mminus1 = self.profile
 
-    def ComputeNextIteration(self):
+    def compute_next_iteration(self):
         # compute H's from current iterate of profile
         (H1, H2, H3, H4, H6, H7, extraturbdata) = self.ComputeAllH(self.t, self.x, self.profile)
         
         # compute matrix system (A, B, C, f)
         (A, B, C, f) = HToMatrixFD.HToMatrix(self.dt, self.dx, self.profile_rightBC, self.profile_mminus1, H1, H2=H2, H3=H3, H4=H4, H6=H6, H7=H7)
 
-        self.converged, rms_error, resid = self.CheckConvergence(A, B, C, f, self.profile, self.tol)
-        self.errhistory[self.l] = rms_error
+        self.converged, rmsError, resid = self.CheckConvergence(A, B, C, f, self.profile, self.tol)
+        self.errhistory[self.l] = rmsError
         
         # compute new iterate of profile
         self.profile = HToMatrixFD.solve(A, B, C, f)
@@ -90,8 +97,10 @@ class solver(object):
             self.m, self.l, self.profile[:4], self.profile[-4:]))
         
         # save data if desired
-        datadict = self._pkgdata(H1=H2, H2=H2, H3=H3, H4=H4, H6=H6, H7=H7, A=A, B=B, C=C, f=f, profile=self.profile, extradata=extraturbdata)
+        datadict = self._pkgdata(H1=H1, H2=H2, H3=H3, H4=H4, H6=H6, H7=H7, A=A, B=B, C=C, f=f, profile=self.profile, rmsError=rmsError, extradata=extraturbdata)
+        
         self.DataSaverHandler.add_data(datadict, self.l)
+        self.fileHandlerExecutor.execute_scheduled(datadict, self.l)
         
         # Check for NaNs or infs or negative values
         self.CheckProfileIsValid(self.profile)
@@ -99,7 +108,7 @@ class solver(object):
         # about to loop to next iteration l
         self.l += 1
         if self.l >= self.MaxIterations:
-            logging.warning("Timestep m={} and time t={}:  MaxIterations ({}) reached.  Error={} while tol={}".format(self.m, self.t, self.MaxIterations, rms_error, self.tol))
+            logging.warning("Timestep m={} and time t={}:  MaxIterations ({}) reached.  Error={} while tol={}".format(self.m, self.t, self.MaxIterations, rmsError, self.tol))
     
     @property
     def ok(self):
@@ -124,7 +133,6 @@ class solver(object):
         if np.any(profile < 0) == True:
             logging.error("Negative value detected in profile at l={}.  Aborting...".format(self.l))
             self.solution_error = True
-            
 
     def CheckConvergence(self, A, B, C, f, profile, tol):
         # convergence check: is || ( M[n^l] n^l - f[n^l] ) / max(abs(f)) || < tol
@@ -150,15 +158,16 @@ class solver(object):
         dt = t_new - t_old
         return t_new, dt
         
-    def _pkgdata(self, H1=None, H2=None, H3=None, H4=None, H6=None, H7=None, A=None, B=None, C=None, f=None, profile=None, extradata=None):
+    def _pkgdata(self, H1=None, H2=None, H3=None, H4=None, H6=None, H7=None, A=None, B=None, C=None, f=None, profile=None, rmsError=None, extradata=None):
         """input dict extradata contains the following [see Hcontrib_TurbulentFlux in lodestro_method.py]:
+        'x': data['x'], 'x_turbgrid': data['x_turbgrid'],
         'D': data['D'], 'c': data['c'],
         'profile_turbgrid': data['profile_turbgrid'], 'profileEWMA_turbgrid': data['profileEWMA_turbgrid'],
         'flux_turbgrid': data['flux_turbgrid'], 'fluxEWMA_turbgrid': data['fluxEWMA_turbgrid'],
         'D_turbgrid': data['D_turbgrid'], 'c_turbgrid': data['c_turbgrid'],
         'Dhat_turbgrid': data['Dhat_turbgrid'], 'chat_turbgrid': data['chat_turbgrid'], 'theta_turbgrid': data['theta_turbgrid']}
         """
-        data1 = {'H1': H1, 'H2': H2, 'H3': H3, 'H4': H4, 'H6': H6, 'H7': H7, 'A': A, 'B': B, 'C': C, 'f': f, 'profile': profile}
+        data1 = {'H1': H1, 'H2': H2, 'H3': H3, 'H4': H4, 'H6': H6, 'H7': H7, 'A': A, 'B': B, 'C': C, 'f': f, 'profile': profile, 'rmsError': rmsError}
         pkg_data = self._merge_two_dicts(extradata, data1)
         return pkg_data
 

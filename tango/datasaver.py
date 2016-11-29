@@ -8,26 +8,46 @@ class dataSaverHandler(object):
     """convenient interface to a dataSavers."""
     def __init__(self):
         self.DataSaver = None
+        self.parallelEnvironment = False
+        self.MPIrank = None
+        
     def initialize_datasaver(self, basename, MaxIterations, arrays_to_save):
         """create a dataSaver and add to collection"""
         self.basename = basename
         self.DataSaver = dataSaver(MaxIterations, arrays_to_save)
         #DataSaver = dataSaver(**kw)
         #self.datasavers.append(DataSaver)
-        return self.DataSaver
+        
     def add_data(self, input_data, iteration_num):
-        if self.DataSaver is not None:
-            self.DataSaver.AddData(input_data, iteration_num)
+        if self.DataSaver is not None and self.serial_or_rank0():
+                self.DataSaver.AddData(input_data, iteration_num)
+                
     def add_one_off_data(self, one_off_data):
-        if self.DataSaver is not None:
+        if self.DataSaver is not None and self.serial_or_rank0():
             self.DataSaver.AddOneOffData(one_off_data)
+            
     def save_to_file(self, m):
-        if self.DataSaver is not None:
+        if self.DataSaver is not None and self.serial_or_rank0():
             filename = self.basename + str(m)
             self.DataSaver.SaveToFile(filename)
+            
     def reset_for_next_timestep(self):
-        if self.DataSaver is not None:
+        if self.DataSaver is not None and self.serial_or_rank0():
             self.DataSaver.ResetForNextTimestep()
+            
+    def set_parallel_environment(self, parallelEnvironment, MPIrank):
+        self.parallelEnvironment = parallelEnvironment
+        self.MPIrank = MPIrank
+        
+    def serial_or_rank0(self):
+        out = False        
+        if self.parallelEnvironment == False:
+            out = True
+        else:
+            if self.MPIrank == 0:
+                out = True
+        return out
+        
         
     
 
