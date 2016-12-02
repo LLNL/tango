@@ -7,17 +7,17 @@ import tango
 import tango.gene_startup
 
 def initialize_iteration_parameters():
-    MaxIterations = 1000
-    thetaparams = {'Dmin': 1e-5,
+    maxIterations = 1000
+    thetaParams = {'Dmin': 1e-5,
                    'Dmax': 1e13,
-                   'dpdx_thresh': 10}
-    EWMA_param_turbflux = 0.30
-    EWMA_param_profile = 0.30
-    lmparams = {'EWMA_param_turbflux': EWMA_param_turbflux,
-            'EWMA_param_profile': EWMA_param_profile,
-            'thetaparams': thetaparams}
+                   'dpdxThreshold': 10}
+    EWMAParamTurbFlux = 0.30
+    EWMAParamProfile = 0.30
+    lmParams = {'EWMAParamTurbFlux': EWMAParamTurbFlux,
+            'EWMAParamProfile': EWMAParamProfile,
+            'thetaParams': thetaParams}
     tol = 1e-11  # tol for convergence... reached when a certain error < tol
-    return (MaxIterations, lmparams, tol)
+    return (maxIterations, lmParams, tol)
     
 class ComputeAllH(object):
     def __init__(self, turbhandler, HcontribTransportPhysics):
@@ -37,7 +37,7 @@ class ComputeAllH(object):
         H1 = self.HcontribTransportPhysics.time_derivative_to_H(timeDerivCoeff)
         
         # turbulent flux
-        (H2_turb, H3_turb, extradata) = self.turbhandler.Hcontrib_TurbulentFlux(pressure)
+        (H2_turb, H3_turb, extradata) = self.turbhandler.Hcontrib_turbulent_flux(pressure)
         
         # add some manually input diffusivity chi
         chi = 0.2 * np.ones_like(psi)   # 0.2 m^2/s
@@ -75,7 +75,7 @@ def problem_setup():
     L = psiTango[-1] - psiTango[0]
     # create object for interfacing tango and GENE radial grids
        # must be consistent with whether Tango's or Gene's radial domain extends farther radially outward
-    grids = tango.interfacegrids_gene.GridInterface_TangoOutside(psiTango, psiGene)
+    grids = tango.interfacegrids_gene.GridInterfaceTangoOutside(psiTango, psiGene)
     
     
     # specify a boundary condition for pressure at the outward radial boundary
@@ -101,18 +101,18 @@ def problem_setup():
     HcontribTransportPhysics = tango.physics_to_H.Hcontrib_TransportPhysics(profilesAll)
     
     # iteration parameters setup
-    MaxIterations, lmparams, tol = initialize_iteration_parameters()    
+    maxIterations, lmParams, tol = initialize_iteration_parameters()    
     
     # creation of turbulence handler
     dpsi = psiTango[1] - psiTango[0]    
-    turbhandler = tango.lodestro_method.TurbulenceHandler(dpsi, psiTango, lmparams, geneFluxModel, grids, Vprime)
+    turbhandler = tango.lodestro_method.TurbulenceHandler(dpsi, psiTango, lmParams, geneFluxModel, grids, Vprime)
     
     # specify a source function?
     
     # initialize the compute all H object
     compute_all_H = ComputeAllH(turbhandler, HcontribTransportPhysics)
     t_array = np.array([0, 1e4])  # specify the timesteps to be used.
-    return (MPIrank, L, psiTango, pressureRightBC, pressureIC, MaxIterations, tol, geneFluxModel, turbhandler, compute_all_H, t_array)
+    return (MPIrank, L, psiTango, pressureRightBC, pressureIC, maxIterations, tol, geneFluxModel, turbhandler, compute_all_H, t_array)
 
 def temperature_to_pressure(temperature, density):
     """Convert temperature to pressure (given a density).
@@ -163,8 +163,8 @@ solver.fileHandlerExecutor.add_handler(tangoHistoryHandler)
 # create parameters for dataSaverHandler
 arrays_to_save = ['H2', 'H3', 'profile'] # see solver.py for list
 databasename = 'datasaver'
-solver.DataSaverHandler.initialize_datasaver(databasename, maxIterations, arrays_to_save)
-solver.DataSaverHandler.set_parallel_environment(parallelEnvironment, MPIrank)
+solver.dataSaverHandler.initialize_datasaver(databasename, maxIterations, arrays_to_save)
+solver.dataSaverHandler.set_parallel_environment(parallelEnvironment, MPIrank)
 
 # logging ??
 #while solver.ok:

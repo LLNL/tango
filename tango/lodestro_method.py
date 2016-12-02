@@ -30,12 +30,12 @@ class TurbulenceHandler(object):
 
     The class is designed to be flexible and accept as given a model to compute the turbulent
     flux.  In principle, this model could be analytic or based on a turbulence code.  The
-    requirement is that it be given as the input FluxModel and have a GetFlux() method.
+    requirement is that it be given as the input fluxModel and have a get_flux() method.
     
     Since the class provides the H coefficients, and not simply diffusion coefficients, it must
     be aware of the coordinate geometric factor V' = dV/dpsi.
     """
-    def __init__(self, dx, x, lmparams, FluxModel, grids=None, Vprime=None):
+    def __init__(self, dx, x, lmParams, fluxModel, grids=None, Vprime=None):
         """A geometric factor Vprime may be optionally provided to the constructor.  This 
             geometric factor is essentially a Jacoabian and appears in transport equations
             in non-Cartesian geometry.  It typically appears in the form
@@ -50,10 +50,10 @@ class TurbulenceHandler(object):
               dx          grid spacing for independent variable x [sometimes referred to in
                             the documentation as psi] (scalar)
               x           independent variable x on the transport grid
-              lmparams    parameters to be used by the lodestro method (dict)
-                            --> EWMA_param_turbflux, EWMA_param_profile, thetaparams
-              FluxModel   object with a GetFlux() method that provides turbulent flux
-                             GetFlux() accepts the profile on the turbulence grid and returns
+              lmParams    parameters to be used by the lodestro method (dict)
+                            --> EWMA_param_turbflux, EWMA_param_profile, thetaParams
+              fluxModel   object with a get_flux() method that provides turbulent flux
+                             get_flux() accepts the profile on the turbulence grid and returns
                              the turbulent flux on the turbulence grid
               grids       (optional) object for transforming the profiles and transport coefficients
                             between the transport grid and the grid used to compute turbulent fluxes
@@ -64,14 +64,14 @@ class TurbulenceHandler(object):
         """
         self.dx = dx
         self.x = x
-        self.LoDestroMethod = lm(lmparams['EWMA_param_turbflux'], lmparams['EWMA_param_profile'], lmparams['thetaparams'])
+        self.lodestroMethod = lm(lmParams['EWMAParamTurbFlux'], lmParams['EWMAParamProfile'], lmParams['thetaParams'])
         
-        self.FluxModel = FluxModel
-        assert hasattr(FluxModel, 'GetFlux') and callable(getattr(FluxModel, 'GetFlux'))
+        self.fluxModel = fluxModel
+        assert hasattr(fluxModel, 'get_flux') and callable(getattr(fluxModel, 'get_flux'))
         
         if grids is not None:
-            assert hasattr(grids, 'MapProfileOntoTurbGrid') and callable(getattr(grids, 'MapProfileOntoTurbGrid'))
-            assert hasattr(grids, 'MapTransportCoeffsOntoTransportGrid') and callable(getattr(grids, 'MapTransportCoeffsOntoTransportGrid'))
+            assert hasattr(grids, 'map_profile_onto_turb_grid') and callable(getattr(grids, 'map_profile_onto_turb_grid'))
+            assert hasattr(grids, 'map_transport_coeffs_onto_transport_grid') and callable(getattr(grids, 'map_transport_coeffs_onto_transport_grid'))
             self.grids = grids
         else:
             self.grids = grids_DoNothing(x)
@@ -82,10 +82,10 @@ class TurbulenceHandler(object):
         else:
             self.isNonCartesian = False
         
-    def Hcontrib_TurbulentFlux(self, profile):
+    def Hcontrib_turbulent_flux(self, profile):
         """Given the lth iterate of a profile (e.g., n), perform all the steps necessary to
         calculate the contributions to the transport equation.  This involves using the
-        LoDestro Method to average over iterates, the FluxModel to compute a turbulent flux,
+        LoDestro Method to average over iterates, the fluxModel to compute a turbulent flux,
         and the LoDestro Method to transform the flux into transport coefficients.  Additionally,
         any necessary transformations between the quantities on the transport grid and the
         quantities on the turbulence grid are also handled.
@@ -98,44 +98,44 @@ class TurbulenceHandler(object):
           H3contrib         array
           data              other data
         """
-        profile_turbgrid = self.grids.MapProfileOntoTurbGrid(profile)
-        profileEWMA_turbgrid = self.LoDestroMethod.EWMA_Profile(profile_turbgrid) # could also reverse the order of this and the previous step...
+        profileTurbGrid = self.grids.map_profile_onto_turb_grid(profile)
+        profileEWMATurbGrid = self.lodestroMethod.ewma_profile(profileTurbGrid) # could also reverse the order of this and the previous step...
         
-        flux_turbgrid = self.FluxModel.GetFlux(profileEWMA_turbgrid)
-        fluxEWMA_turbgrid = self.LoDestroMethod.EWMA_TurbFlux(flux_turbgrid)
-        (D_turbgrid, c_turbgrid, Dcdata_turbgrid) = self.LoDestroMethod.FluxToTransportCoeffs(fluxEWMA_turbgrid, profileEWMA_turbgrid, self.dx)
-        (D, c) = self.grids.MapTransportCoeffsOntoTransportGrid(D_turbgrid, c_turbgrid)
-        (H2contrib, H3contrib) = self.DcToHcontrib(D, c)
+        fluxTurbGrid = self.fluxModel.get_flux(profileEWMATurbGrid)
+        fluxEWMATurbGrid = self.lodestroMethod.ewma_turb_flux(fluxTurbGrid)
+        (DTurbGrid, cTurbGrid, DcDataTurbGrid) = self.lodestroMethod.flux_to_transport_coeffs(fluxEWMATurbGrid, profileEWMATurbGrid, self.dx)
+        (D, c) = self.grids.map_transport_coeffs_onto_transport_grid(DTurbGrid, cTurbGrid)
+        (H2contrib, H3contrib) = self.Dc_to_Hcontrib(D, c)
         
         # Other data that may be useful for debugging or data analysis purposes
         x = self.grids.get_x_transport_grid()        
-        x_turbgrid = self.grids.get_x_turbulence_grid()
-        data = {'x': x, 'x_turbgrid': x_turbgrid,
+        xTurbGrid = self.grids.get_x_turbulence_grid()
+        data = {'x': x, 'xTurbGrid': xTurbGrid,
                 'D': D, 'c': c,
-                'profile_turbgrid': profile_turbgrid, 'profileEWMA_turbgrid': profileEWMA_turbgrid,
-                'flux_turbgrid': flux_turbgrid, 'fluxEWMA_turbgrid': fluxEWMA_turbgrid,
-                'D_turbgrid': D_turbgrid, 'c_turbgrid': c_turbgrid,
-                'Dhat_turbgrid': Dcdata_turbgrid['D_hat'], 'chat_turbgrid': Dcdata_turbgrid['c_hat'], 'theta_turbgrid': Dcdata_turbgrid['theta']}
+                'profileTurbGrid': profileTurbGrid, 'profileEWMATurbGrid': profileEWMATurbGrid,
+                'fluxTurbGrid': fluxTurbGrid, 'fluxEWMATurbGrid': fluxEWMATurbGrid,
+                'DTurbGrid': DTurbGrid, 'cTurbGrid': cTurbGrid,
+                'DHatTurbGrid': DcDataTurbGrid['DHat'], 'cHatTurbGrid': DcDataTurbGrid['cHat'], 'thetaTurbGrid': DcDataTurbGrid['theta']}
         return (H2contrib, H3contrib, data)
     
-    def get_EWMA_params(self):
+    def get_ewma_params(self):
         """Return the EWMA parameter for turbulent flux and the profile, respectively.
 
         Outputs:
-          EWMAparam_turbflux    (scalar)
-          EWMAparam_profile     (scalar)
+          EWMAParamTurbFlux    (scalar)
+          EWMAParamProfile     (scalar)
         """
-        (EWMAparam_turbflux, EWMAparam_profile) = self.LoDestroMethod.get_EWMA_params()
-        return (EWMAparam_turbflux, EWMAparam_profile)
+        (EWMAParamTurbFlux, EWMAParamProfile) = self.lodestroMethod.get_ewma_params()
+        return (EWMAParamTurbFlux, EWMAParamProfile)
         
-    def set_ewma_iterates(self, profileEWMA, turbfluxEWMA):
+    def set_ewma_iterates(self, profileEWMA, turbFluxEWMA):
         """See lm.set_ewma_iterates() for details.
         
         Useful for restoring Tango from a checkpoint.
         """
-        self.LoDestroMethod.set_ewma_iterates(profileEWMA, turbfluxEWMA)
+        self.lodestroMethod.set_ewma_iterates(profileEWMA, turbFluxEWMA)
         
-    def DcToHcontrib(self, D, c):
+    def Dc_to_Hcontrib(self, D, c):
         """Transform the effective diffusion coefficient D and effective convective velocity c
         into the contributions to the H coefficients for the iteration-update solver for the
         transport equation.  The form of the transport equation for ion pressure is 
@@ -163,40 +163,40 @@ class lm(object):
         2) Transform (averaged) turbulent fluxes into effective transport coefficients
     These two functions are handled with two separate classes    
     """
-    def __init__(self, EWMA_param_turbflux, EWMA_param_profile, thetaparams):
+    def __init__(self, EWMAParamTurbFlux, EWMAParamProfile, thetaParams):
         # create instances for handling EWMAs
-        self._EWMAturbflux = EWMA(EWMA_param_turbflux)
-        self._EWMAprofile = EWMA(EWMA_param_profile)
+        self._EWMATurbFlux = EWMA(EWMAParamTurbFlux)
+        self._EWMAProfile = EWMA(EWMAParamProfile)
         
         # Create instance of FluxSplit
-        self._FluxSplitter = FluxSplit(thetaparams) 
+        self._fluxSplitter = FluxSplit(thetaParams) 
     
-    # Provide an interface to the EWMA and FluxSplitter methods
-    def EWMA_TurbFlux(self, turbflux_l):
+    # Provide an interface to the EWMA and fluxSplitter methods
+    def ewma_turb_flux(self, turbFlux_l):
         """Return the next iterate of the exponentially weighted moving average of the turbulent flux.
-        See EWMA.NextEWMAIterate() for more detail.
+        See EWMA.next_ewma_iterate() for more detail.
         Inputs:  
-          turbflux_l             current value (iterate l) of turbflux; array
+          turbFlux_l             current value (iterate l) of turbflux; array
           
         Outputs:
-          turbfluxEWMA_l         current value (iterate l) of turbfluxEWMA_l; array        
+          turbFluxEWMA_l         current value (iterate l) of turbfluxEWMA_l; array        
         """
-        return self._EWMAturbflux.NextEWMAIterate(turbflux_l)
+        return self._EWMATurbFlux.next_ewma_iterate(turbFlux_l)
         
-    def EWMA_Profile(self, profile_l):
+    def ewma_profile(self, profile_l):
         """Return the next iterate of the exponentially weighted moving average of the profile.
-        See EWMA.NextEWMAIterate() for more detail.
+        See EWMA.next_ewma_iterate() for more detail.
         Inputs:  
           profile_l             current value (iterate l) of profile; array
           
         Outputs:
           profileEWMA_l         current value (iterate l) of profileEWMA_l; array        
         """
-        return self._EWMAprofile.NextEWMAIterate(profile_l)
+        return self._EWMAProfile.next_ewma_iterate(profile_l)
         
-    def FluxToTransportCoeffs(self, flux, p, dx):
+    def flux_to_transport_coeffs(self, flux, p, dx):
         """Transform a flux into effective transport coefficients.
-        See FluxSplit.FluxToTransportCoeffs() for more detail.
+        See FluxSplit.flux_to_transport_coeffs() for more detail.
         
         Inputs:
           flux          (averaged) flux given on integer grid points (array)
@@ -208,29 +208,29 @@ class lm(object):
           c             Effective convective coefficient (array)
           data          Other data useful for debugging (dict)        
         """
-        (D, c, data) = self._FluxSplitter.FluxToTransportCoeffs(flux, p, dx)
+        (D, c, data) = self._fluxSplitter.flux_to_transport_coeffs(flux, p, dx)
         return (D, c, data)
         
-    def get_EWMA_params(self):
+    def get_ewma_params(self):
         """Return the EWMA parameter for turbulent flux and the profile, respectively.
 
         Outputs:
-          EWMAparam_turbflux    (scalar)
-          EWMAparam_profile     (scalar)
+          EWMAParamTurbFlux    (scalar)
+          EWMAParamProfile     (scalar)
         """
-        EWMAparam_turbflux = self._EWMAturbflux.EWMA_param 
-        EWMAparam_profile = self._EWMAprofile.EWMA_param
-        return (EWMAparam_turbflux, EWMAparam_profile)
+        EWMAParamTurbFlux = self._EWMATurbFlux.EWMAParam 
+        EWMAParamProfile = self._EWMAProfile.EWMAParam
+        return (EWMAParamTurbFlux, EWMAParamProfile)
     
-    def set_ewma_iterates(self, profileEWMA, turbfluxEWMA):
+    def set_ewma_iterates(self, profileEWMA, turbFluxEWMA):
         """Set the EWMA iterates for both the profile and turbulent flux.
         
         Inputs:
           profileEWMA   New EWMA iterate for the profile (array)
-          turbfluxEWMA  New EWMA iterate for the turbulent flux (array)
+          turbFluxEWMA  New EWMA iterate for the turbulent flux (array)
         """
-        self._EWMAprofile.set_ewma_iterate(profileEWMA)
-        self._EWMAturbflux.set_ewma_iterate(turbfluxEWMA)
+        self._EWMAProfile.set_ewma_iterate(profileEWMA)
+        self._EWMATurbFlux.set_ewma_iterate(turbFluxEWMA)
     
         
 class FluxSplit(object):
@@ -238,15 +238,15 @@ class FluxSplit(object):
     profiles is assumed to be applied externally.  This, for a given profile p, determines D and c such that
         Gamma = -D*dp/dx + c*p
     """
-    def __init__(self, thetaparams):
+    def __init__(self, thetaParams):
         """Class constructor
-            Inputs:
-               thetaparams              dict containing parameters to be used in the ftheta function.
+        Inputs:
+          thetaParams              dict containing parameters to be used in the ftheta function.
         """
         # define/initialize internal varibales
-        self.thetaparams = thetaparams
+        self.thetaParams = thetaParams
     
-    def FluxToTransportCoeffs(self, flux, p, dx):
+    def flux_to_transport_coeffs(self, flux, p, dx):
         """Given the current iterate of the (averaged/relaxed) flux, use the LoDestro Method to compute effective transport coefficients
             to be used in Picard Iteration.
         
@@ -271,16 +271,16 @@ class FluxSplit(object):
         
           *************************
         
-        This function first calculates D_hat and c_hat, which are the diffusion and convective coefficients that would result if the
-          turbulent flux were represented as purely diffusive (D_hat) or purely convective (c_hat).  That is,
+        This function first calculates DHat and cHat, which are the diffusion and convective coefficients that would result if the
+          turbulent flux were represented as purely diffusive (DHat) or purely convective (cHat).  That is,
           
-            D_hat = -Flux / (dp/dx),
-            c_hat = Flux / p
+            DHat = -Flux / (dp/dx),
+            cHat = Flux / p
         
         Then, a coefficient theta is computed that determines the split between diffusive and convective contributions.
         
-            D = theta * D_hat
-            c = (1 - theta) * c_hat
+            D = theta * DHat
+            c = (1 - theta) * cHat
             
             0 <= theta <= 1
             
@@ -311,49 +311,49 @@ class FluxSplit(object):
           are different than the dimensions of D2 if |grad psi|^2 is not dimensionless.       
         """
         dpdx = derivatives.dx_centered_difference(p, dx)
-        D_hat = -flux / dpdx
-        D_hat[dpdx==0] = 0     # get rid of infinities resulting from divide by zero
-        c_hat = flux / p
+        DHat = -flux / dpdx
+        DHat[dpdx==0] = 0     # get rid of infinities resulting from divide by zero
+        cHat = flux / p
         
-        theta = self._ftheta(D_hat, dpdx, self.thetaparams)
+        theta = self._ftheta(DHat, dpdx, self.thetaParams)
         # uncomment the following line to turn off convective terms and use only diffusive terms
         # theta[:] = 1        
         
-        D = theta * D_hat
-        c = (1 - theta) * c_hat
+        D = theta * DHat
+        c = (1 - theta) * cHat
         
         # "data" contains other data that may be useful for debugging purposes
-        data = {'D_hat': D_hat, 'c_hat': c_hat, 'theta': theta}
+        data = {'DHat': DHat, 'cHat': cHat, 'theta': theta}
         return (D, c, data)
         
     @staticmethod
-    def _ftheta(D_hat, dpdx, thetaparams):
+    def _ftheta(DHat, dpdx, thetaParams):
         """Scheme to calculate theta, the parameter that determines the split between diffusive and convective pieces in representations
           of the flux.
         
         Modification of Shestakov's default algorithm.  Here, when Dhat is large, we only add a convective part if dp/dx is also SMALL.
-          In other words, if Flux and D_hat are large because dp/dx is large, then representing the flux purely as diffusive is fine.
-          The convective split for large D_hat is really to protect against spurious large D_hat resulting from finite flux at small
+          In other words, if Flux and DHat are large because dp/dx is large, then representing the flux purely as diffusive is fine.
+          The convective split for large DHat is really to protect against spurious large DHat resulting from finite flux at small
           gradients.
           
-            if D_hat < Dmin, set theta to 0 (all convective)
-            if D_hat >= Dmin AND dp/dx is small, use the Shestakov formula
+            if DHat < Dmin, set theta to 0 (all convective)
+            if DHat >= Dmin AND dp/dx is small, use the Shestakov formula
             otherwise, set theta = 1 (all diffusive)
             
         What to use for Dmin, Dmax, and dpdx_thresh will depend on the problem.  The numerical values will further depend on what
           units are used to represent the dependent and independent variables.
         """
-        Dmin = thetaparams['Dmin']  # scalar
-        Dmax = thetaparams['Dmax']  # scalar
-        dpdx_thresh = thetaparams['dpdx_thresh'] # scalar
+        Dmin = thetaParams['Dmin']  # scalar
+        Dmax = thetaParams['Dmax']  # scalar
+        dpdxThreshold = thetaParams['dpdxThreshold'] # scalar
         
-        ind1 = D_hat < Dmin
-        ind2 = np.logical_and.reduce((abs(dpdx) < dpdx_thresh, D_hat >= Dmin, D_hat <= Dmax))
-        ind3 = np.logical_and(abs(dpdx) < dpdx_thresh, D_hat > Dmax)
+        ind1 = DHat < Dmin
+        ind2 = np.logical_and.reduce((abs(dpdx) < dpdxThreshold, DHat >= Dmin, DHat <= Dmax))
+        ind3 = np.logical_and(abs(dpdx) < dpdxThreshold, DHat > Dmax)
         
-        theta = np.ones_like(D_hat)
+        theta = np.ones_like(DHat)
         theta[ind1] = 0
-        theta[ind2] = (Dmax - D_hat[ind2]) / (Dmax - Dmin)
+        theta[ind2] = (Dmax - DHat[ind2]) / (Dmax - Dmin)
         theta[ind3] = 0
         
         assert np.count_nonzero(np.logical_and(theta>=0, theta<=1)) == np.size(theta), 'some theta is not between 0 and 1'
@@ -364,14 +364,14 @@ class EWMA(object):
     """Class for handling the exponentially weighted moving average.  Each instance stores a previous iterate and the relaxation
     parameter for a single profile.
     """
-    def __init__(self, EWMA_param):
+    def __init__(self, EWMAParam):
         # define/initialize internal varibales
-        self.EWMA_param = EWMA_param
+        self.EWMAParam = EWMAParam
         
         # memory of previous relaxed iterates 
         self._yEWMA_lminus1 = None
     
-    def NextEWMAIterate(self, y_l):
+    def next_ewma_iterate(self, y_l):
         """Return the next iterate of the exponentially weighted moving average (EWMA).
         Inputs:  
           y_l             current value (iterate l) of y; array
@@ -386,13 +386,13 @@ class EWMA(object):
         """
         if self._yEWMA_lminus1 is None:               # initialization for the first time this is called
             self._yEWMA_lminus1 = y_l
-        yEWMA_l = self._ComputeNextEWMA(y_l, self._yEWMA_lminus1, self.EWMA_param)
+        yEWMA_l = self._compute_next_ewma(y_l, self._yEWMA_lminus1, self.EWMAParam)
         
         self._yEWMA_lminus1 = yEWMA_l
         return yEWMA_l
     
     @staticmethod
-    def _ComputeNextEWMA(y_l, yEWMA_lminus1, EWMA_param):
+    def _compute_next_ewma(y_l, yEWMA_lminus1, EWMAParam):
         """Compute the next iterate of the exponentially weighted moving average (EWMA) of a quantity y.
         This can be done using a recursive formula that is a form of relaxation.
         
@@ -400,9 +400,9 @@ class EWMA(object):
         Note: EWMA_param = 1  means no relaxation (use current value), while 
               EWMA_param = .001 means a lot of relaxation (use very little of current value)
         """
-        return EWMA_param * y_l  +  (1-EWMA_param) * yEWMA_lminus1
+        return EWMAParam * y_l  +  (1-EWMAParam) * yEWMA_lminus1
         
-    def ResetEWMAIterate(self):
+    def reset_ewma_iterate(self):
         self._yEWMA_lminus1 = None
     
     def set_ewma_iterate(self, yEWMA):
@@ -414,9 +414,9 @@ class grids_DoNothing(object):
     """
     def __init__(self, x):
         self.x = x
-    def MapProfileOntoTurbGrid(self, profile):
+    def map_profile_onto_turb_grid(self, profile):
         return profile
-    def MapTransportCoeffsOntoTransportGrid(self, D, c):
+    def map_transport_coeffs_onto_transport_grid(self, D, c):
         return (D, c)
     def get_x_transport_grid(self):
         return self.x

@@ -26,23 +26,23 @@ def initialize_shestakov_problem():
     return (L, N, dx, x, nL, n_initialcondition)
 
 def initialize_parameters():
-    MaxIterations = 2000
-    thetaparams = {'Dmin': 1e-5,
+    maxIterations = 2000
+    thetaParams = {'Dmin': 1e-5,
                    'Dmax': 1e13,
-                   'dpdx_thresh': 10}
-    EWMA_param_turbflux = 0.30
-    EWMA_param_profile = 0.30
-    lmparams = {'EWMA_param_turbflux': EWMA_param_turbflux,
-            'EWMA_param_profile': EWMA_param_profile,
-            'thetaparams': thetaparams}
+                   'dpdxThreshold': 10}
+    EWMAParamTurbFlux = 0.30
+    EWMAParamProfile = 0.30
+    lmParams = {'EWMAParamTurbFlux': EWMAParamTurbFlux,
+            'EWMAParamProfile': EWMAParamProfile,
+            'thetaParams': thetaParams}
     tol = 1e-11  # tol for convergence... reached when a certain error < tol
-    return (MaxIterations, lmparams, tol)
+    return (maxIterations, lmParams, tol)
 
 def Compute_AllH(t, x, n, turbhandler):
     # Define the contributions to the H coefficients for the Shestakov Problem
     H1 = np.ones_like(x)
     H7 = shestakov_nonlinear_diffusion.H7contrib_Source(x)
-    (H2, H3, data) = turbhandler.Hcontrib_TurbulentFlux(n)
+    (H2, H3, data) = turbhandler.Hcontrib_turbulent_flux(n)
     H4 = None
     H6 = None
     return (H1, H2, H3, H4, H6, H7)
@@ -81,7 +81,7 @@ def pkg_data(H2=None, H3=None, n=None):
     data = {'H2': H2, 'H3': H3, 'n':n}
     return data
     
-DataSaver = tng.datasaver.dataSaver(MaxIterations, arrays_to_save)
+dataSaver = tng.datasaver.DataSaver(MaxIterations, arrays_to_save)
 
             
 FluxModel = shestakov_nonlinear_diffusion.shestakov_analytic_fluxmodel(dx)
@@ -105,7 +105,7 @@ for m in range(1, len(t)):
         (H1, H2, H3, H4, H6, H7) = Compute_AllH(t, x, n, turbhandler)
         
         # compute matrix system (A, B, C, f)
-        (A, B, C, f) = tng.HToMatrix(dt, dx, nL, n_mminus1, H1, H2=H2, H3=H3, H4=H4, H6=H6, H7=H7)
+        (A, B, C, f) = tng.H_to_matrix(dt, dx, nL, n_mminus1, H1, H2=H2, H3=H3, H4=H4, H6=H6, H7=H7)
 
         converged, rms_error, resid = CheckConvergence(A, B, C, f, n, tol)
         errhistory[l-1] = rms_error
@@ -118,7 +118,7 @@ for m in range(1, len(t)):
         
         # save data if desired
         
-        DataSaver.AddData( pkg_data(H2=H2, H3=H3, n=n), l)
+        dataSaver.add_data( pkg_data(H2=H2, H3=H3, n=n), l)
         
         # Check for NaNs or infs
         if np.all(np.isfinite(n)) == False:
@@ -134,10 +134,10 @@ for m in range(1, len(t)):
     # Converged.  Before advancing to next timestep m, save some stuff   
     if m==len(t)-1:   # save on the final timestep only
         errhistory_final = errhistory[0:l-1]
-        one_off_data = {'x': x, 'n_mminus1': n_mminus1, 'errhistory': errhistory_final, 't': t[m], 'm': m}
-        DataSaver.AddOneOffData(one_off_data)
+        oneOffData = {'x': x, 'n_mminus1': n_mminus1, 'errHistory': errhistory_final, 't': t[m], 'm': m}
+        dataSaver.add_one_off_data(oneOffData)
         data_filename = 'shestakov_example_data'
-        DataSaver.SaveToFile(data_filename)
+        dataSaver.save_to_file(data_filename)
     
     n_mminus1 = n
     print('Number of iterations is %d' % l)

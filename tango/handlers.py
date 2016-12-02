@@ -157,9 +157,9 @@ class TangoCheckpointHandler(Handler):
         np.savetxt(filename_prof, np.transpose([xTango, pressureProfile]), header=str(iterationNumber))
         
         filename_ewma = self.basename + '_ewma.txt'
-        xTurbGrid = data['x_turbgrid']
-        profileEWMATurbGrid = data['profileEWMA_turbgrid']
-        fluxEWMATurbGrid = data['fluxEWMA_turbgrid']
+        xTurbGrid = data['xTurbGrid']
+        profileEWMATurbGrid = data['profileEWMATurbGrid']
+        fluxEWMATurbGrid = data['fluxEWMATurbGrid']
         np.savetxt(filename_ewma, np.transpose([xTurbGrid, profileEWMATurbGrid, fluxEWMATurbGrid]))
     
 class TangoHistoryHandler(Handler):
@@ -220,7 +220,7 @@ class TangoHistoryHandler(Handler):
                 # save the data into the container
                 self.data1D[varName][self.countStoredIterations, :] = data[varName]
             elif np.size(data[varName]) == 1:   # scalars
-                # initialize storage o nfirst use
+                # initialize storage on first use
                 if self.countStoredIterations==0:
                     self.data0D[varName] = np.zeros(self.maxCount)
                 

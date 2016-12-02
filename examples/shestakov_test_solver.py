@@ -24,23 +24,23 @@ def initialize_shestakov_problem():
     return (L, N, dx, x, nL, n_initialcondition)
 
 def initialize_parameters():
-    MaxIterations = 2000
-    thetaparams = {'Dmin': 1e-5,
+    maxIterations = 2000
+    thetaParams = {'Dmin': 1e-5,
                    'Dmax': 1e13,
-                   'dpdx_thresh': 10}
-    EWMA_param_turbflux = 0.30
-    EWMA_param_profile = 0.30
-    lmparams = {'EWMA_param_turbflux': EWMA_param_turbflux,
-            'EWMA_param_profile': EWMA_param_profile,
-            'thetaparams': thetaparams}
+                   'dpdxThreshold': 10}
+    EWMAParamTurbFlux = 0.30
+    EWMAParamProfile = 0.30
+    lmParams = {'EWMAParamTurbFlux': EWMAParamTurbFlux,
+            'EWMAParamProfile': EWMAParamProfile,
+            'thetaParams': thetaParams}
     tol = 1e-11  # tol for convergence... reached when a certain error < tol
-    return (MaxIterations, lmparams, tol)
+    return (maxIterations, lmParams, tol)
 
 def Compute_Hs(x, n, turbhandler):
     # Define the contributions to the H coefficients for the Shestakov Problem
     H1 = np.ones_like(x)
     H7 = shestakov_nonlinear_diffusion.H7contrib_Source(x)
-    (H2, H3, data) = turbhandler.Hcontrib_TurbulentFlux(n)
+    (H2, H3, data) = turbhandler.Hcontrib_turbulent_flux(n)
     H4 = None
     H6 = None
     return (H1, H2, H3, H4, H6, H7)
@@ -86,7 +86,7 @@ for m in range(1, len(t)):
         (H1, H2, H3, H4, H6, H7) = Compute_Hs(x, n, turbhandler)
         
         # compute matrix system (A, B, C, f)
-        (A, B, C, f) = tng.HToMatrix(dt, dx, nL, n_mminus1, H1, H2=H2, H3=H3, H4=H4, H6=H6, H7=H7)
+        (A, B, C, f) = tng.H_to_matrix(dt, dx, nL, n_mminus1, H1, H2=H2, H3=H3, H4=H4, H6=H6, H7=H7)
 
         converged, rms_error, resid = CheckConvergence(A, B, C, f, n, tol)
         errhistory[l-1] = rms_error

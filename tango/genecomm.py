@@ -18,7 +18,7 @@ Responsibilities
 class geneComm(object):
     """Class-based interface for Tango to call GENE.
     
-    Tango requires an object with a GetFlux() method, which this class provides.  Except where specifically noted otherwise,
+    Tango requires an object with a get_flux() method, which this class provides.  Except where specifically noted otherwise,
     all quantities are stored in SI units.
     """
     def __init__(self, Bref=None, Lref=None, Tref=1, nref=1, B0=None, a=None, R0=None, safetyFactorGeneGrid=None,
@@ -69,7 +69,7 @@ class geneComm(object):
     
     
     #### Interface for Tango  ####
-    def GetFlux(self, pressureGeneGrid):
+    def get_flux(self, pressureGeneGrid):
         """Run GENE with a given pressure profile.  Return heat flux.
         
         According to the documentation for the Turbulence Handler, GetFlux() must take as input the profile on the turbulence grid and return
@@ -123,11 +123,11 @@ class geneComm(object):
           geneInterface     Instance of genecomm_lowlevel.GeneInterface, enables running GENE
         """
         # convert SI quantities to what GENE expects
-        rho_geneinterface = genecomm_unitconversion.radius_SI_to_libgenetango_input(self.psiGeneGrid, self.a)  # convert to rho = r/a
+        rhoGeneInterface = genecomm_unitconversion.radius_SI_to_libgenetango_input(self.psiGeneGrid, self.a)  # convert to rho = r/a
         densityHatTangoGrid = genecomm_unitconversion.density_SI_to_gene(self.densityTangoGrid)
         densityHatGeneGrid = self.gridMapper.MapProfileOntoTurbGrid(densityHatTangoGrid)
                 
-        geneInterface = genecomm_lowlevel.GeneInterface(rho=rho_geneinterface, densityHat=densityHatGeneGrid,
+        geneInterface = genecomm_lowlevel.GeneInterface(rho=rhoGeneInterface, densityHat=densityHatGeneGrid,
                                                         safetyFactor=self.safetyFactorGeneGrid, ionMass=self.ionMass, ionCharge=self.ionCharge,
                                                         Lref=self.Lref, Bref=self.Bref)
         return geneInterface

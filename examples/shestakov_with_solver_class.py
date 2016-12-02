@@ -28,17 +28,17 @@ def initialize_shestakov_problem():
     return (L, N, dx, x, nL, n_initialcondition)
 
 def initialize_parameters():
-    MaxIterations = 1000
-    thetaparams = {'Dmin': 1e-5,
+    maxIterations = 1000
+    thetaParams = {'Dmin': 1e-5,
                    'Dmax': 1e13,
-                   'dpdx_thresh': 10}
-    EWMA_param_turbflux = 0.30
-    EWMA_param_profile = 0.30
-    lmparams = {'EWMA_param_turbflux': EWMA_param_turbflux,
-            'EWMA_param_profile': EWMA_param_profile,
-            'thetaparams': thetaparams}
+                   'dpdxThreshold': 10}
+    EWMAParamTurbFlux = 0.30
+    EWMAParamProfile = 0.30
+    lmParams = {'EWMAParamTurbFlux': EWMAParamTurbFlux,
+            'EWMAParamProfile': EWMAParamProfile,
+            'thetaParams': thetaParams}
     tol = 1e-11  # tol for convergence... reached when a certain error < tol
-    return (MaxIterations, lmparams, tol)
+    return (maxIterations, lmParams, tol)
 
 class ComputeAllH(object):
     def __init__(self, turbhandler):
@@ -47,7 +47,7 @@ class ComputeAllH(object):
         # Define the contributions to the H coefficients for the Shestakov Problem
         H1 = np.ones_like(x)
         H7 = shestakov_nonlinear_diffusion.H7contrib_Source(x)
-        (H2, H3, extradata) = self.turbhandler.Hcontrib_TurbulentFlux(n)
+        (H2, H3, extradata) = self.turbhandler.Hcontrib_turbulent_flux(n)
         H4 = None
         H6 = None
         return (H1, H2, H3, H4, H6, H7, extradata)
@@ -62,19 +62,19 @@ logging.basicConfig(filename=logfile, filemode='w', level=logging.INFO)
 
 logging.info("Initializing...")
 L, N, dx, x, nL, n = initialize_shestakov_problem()
-MaxIterations, lmparams, tol = initialize_parameters()
+maxIterations, lmparams, tol = initialize_parameters()
 FluxModel = shestakov_nonlinear_diffusion.shestakov_analytic_fluxmodel(dx)
 turbhandler = tng.TurbulenceHandler(dx, x, lmparams, FluxModel)
 
 t_array = np.array([0, 1e4])  # specify the timesteps to be used.
 
 compute_all_H = ComputeAllH(turbhandler)
-solver = tng.solver.solver(L, x, n, nL, t_array, MaxIterations, tol, compute_all_H, turbhandler)
+solver = tng.solver.solver(L, x, n, nL, t_array, maxIterations, tol, compute_all_H, turbhandler)
 
 # set up data logger
 arrays_to_save = ['H2', 'H3', 'profile']  # for list of possible arrays, see solver._pkgdata()
 data_basename = 'shestakov_solution_data'
-solver.DataSaverHandler.initialize_datasaver(data_basename, MaxIterations, arrays_to_save)
+solver.dataSaverHandler.initialize_datasaver(data_basename, maxIterations, arrays_to_save)
 logging.info("Preparing DataSaver to save files with prefix {}.".format(data_basename))
 
 logging.info("Initialization complete.")
@@ -82,7 +82,7 @@ logging.info("Initialization complete.")
 logging.info("Beginning time integration...")
 while solver.ok:
     # Implicit time advance: iterate to solve the nonlinear equation!
-    solver.TakeTimestep()
+    solver.take_timestep()
 
 
     
@@ -98,7 +98,7 @@ plt.plot(x, nss, 'r-')
 solution_residual = (n - nss) / np.max(np.abs(nss))
 solution_rms_error = np.sqrt( 1/len(n) * np.sum(solution_residual**2))
 
-if solver.reached_end == True:
+if solver.reachedEnd == True:
     print("The solution has been reached successfully.")
     print('Error compared to analytic steady state solution is %f' % (solution_rms_error))
 else:
@@ -114,5 +114,5 @@ else:
 #plt.ylim(ymin=0)
 filename = data_basename + "1"
 Timestep = tng.analysis.TimestepData(filename)
-lastiter = Timestep.GetLastIteration()
-lastiter.PlotProfileAndStartingProfile(savename='solution.png')
+lastiter = Timestep.get_last_iteration()
+lastiter.plot_profile_and_starting_profile(savename='solution.png')

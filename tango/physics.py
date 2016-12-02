@@ -140,7 +140,7 @@ def sigma_to_chi(sigma, gradpsisq):
     return chi
 
 
-def Mockup_trapezoidal_chi(psi1, psi2, chi_max, psi):
+def mockup_trapezoidal_chi(psi1, psi2, chiMax, psi):
     """Create a diffusivity chi in the same of a trapezoid on the grid psi.
   
 chi(psi) looks like:  
@@ -158,7 +158,7 @@ ______ /   .
     Inputs:
       psi1          value of psi at which chi begins to grow linearly from 0 (scalar)
       psi2          value of psi at which chi reaches chi_max (scalar)
-      chi_max       peak of chi (scalar)
+      chiMax        peak of chi (scalar)
       psi           grid (array) [it is assumed that psi increases monotonically]
     
     Outputs:
@@ -168,47 +168,52 @@ ______ /   .
     chi = np.zeros_like(psi)
     # region 2: the linearly increasing region
     if psi1 != psi2:
-        ind_region2 = (psi > psi1) & (psi < psi2)
-        slope = chi_max / (psi2 - psi1)
-        chi[ind_region2] = slope * (psi[ind_region2] - psi1)
+        indRegion2 = (psi > psi1) & (psi < psi2)
+        slope = chiMax / (psi2 - psi1)
+        chi[indRegion2] = slope * (psi[indRegion2] - psi1)
     
     # region 3: chi=chi_max
-    ind_region3 = psi >= psi2
-    chi[ind_region3] = chi_max
+    indRegion3 = psi >= psi2
+    chi[indRegion3] = chiMax
     pass  
 
 
-# need to change the input argument
-def CollisionalEnergyExchange(Profiles):
-    """Contribution to linear equation for new iteration from the collisional energy exchange term in the ion pressure equation.
-          n * nuE_ie * (Te-Ti)  =  n*nuE_ie*Te - nuE_ie*pi
-        currently not normalized (given in SI units...)
-    """
-    mu = Profiles.mu
-    Z = Profiles.Z
-    Te = Profiles.GetElectronTemperature()
-    
-    n = Profiles.GetIonDensity()       # in SI units.  assume ni = ne
-    ne = n    
-    
-    logLambda = 10
-    Te_ineV = Te/e      # convert from J to eV
-    
-    # Reference: NRL formulary.  Gives result in s^-1
-    nuE_ie = 3.2e-15 * ne * Z**2 * logLambda / (mu * Te_ineV)
-        
-    # Contributions to finite difference arrays
-    B_contrib = nuE_ie
-    H_contrib = -n * nuE_ie * Te
-    
-    A_contrib = np.zeros_like(B_contrib)
-    C_contrib = np.zeros_like(B_contrib)
-    
-    # right boundary: Dirichlet
-    B_contrib[-1] = 0
-    H_contrib[-1] = 0    
-    
-    return (A_contrib, B_contrib, C_contrib, H_contrib)
+#def collisional_energy_exchange(ionMass, ionCharge, electronTemperature, ionDensity):
+#    """Contribution to linear equation for new iteration from the collisional energy exchange term in the ion pressure equation.
+#          n * nuE_ie * (Te-Ti)  =  n*nuE_ie*Te - nuE_ie*pi
+#        currently not normalized (given in SI units...)
+#        
+#    Inputs:
+#      ionMass                   ion mass, measured in proton masses (scalar)
+#      ionCharge                 ion charge number Z, measured in electron charge (scalar)
+#      electronTemperature       (scalar or array)
+#      ionDensity                (scalar or array)
+#    Outputs:
+#      A_contrib
+#      B_contrib
+#      C_contrib
+#      H_contrib
+#    """
+#    electronDensity = ionDensity * ionCharge    
+#    
+#    logLambda = 10
+#    Te_ineV = electronTemperature / e      # convert from J to eV
+#    
+#    # Reference: NRL formulary.  Gives result in s^-1
+#    nuE_ie = 3.2e-15 * electronDensity * ionCharge**2 * logLambda / (ionMass * Te_ineV)
+#        
+#    # Contributions to finite difference arrays
+#    B_contrib = nuE_ie
+#    H_contrib = -ionDensity * nuE_ie * electronTemperature
+#    
+#    A_contrib = np.zeros_like(B_contrib)
+#    C_contrib = np.zeros_like(B_contrib)
+#    
+#    # right boundary: Dirichlet
+#    B_contrib[-1] = 0
+#    H_contrib[-1] = 0    
+#    
+#    return (A_contrib, B_contrib, C_contrib, H_contrib)
     
     
 def nu_Braginskii(n, T, mu, Z):
@@ -284,17 +289,8 @@ class ProfilesAll(object):
     @property
     def Ti(self):
         return self.P / self.n
-    def IonTemperatureIneV(self):
-        return self.Ti/self.e
-#    def AsDict(self):
-#        """
-#        Return profile data as a dict
-#        """
-#        profilesAll = {'mu': self.mu, 'a': self.a, 'R0': self.R0,
-#                        'n': self.n, 'Te': self.Te,
-#                        'Vprime': self.Vprime, 'gradpsisq': self.gradpsisq}
-#        return profilesAll
-        
+    def ion_temperature_in_eV(self):
+        return self.Ti/self.e        
 
 def initialize_profile_defaults(ionMass, density, r, minorRadius, majorRadius, B0, Vprime, gradPsiSq):
     """Create and return an instance of ProfilesAll.
@@ -313,7 +309,6 @@ def initialize_profile_defaults(ionMass, density, r, minorRadius, majorRadius, B
     qbar = parameters.analytic_safety_factor_qbar(r, minorRadius)
     profilesAll = ProfilesAll(ionMass, density, r, minorRadius, majorRadius, B_pi2, qbar, Vprime, gradPsiSq)
     return profilesAll
-    
     
 def magnetic_geometry_circular(r, a, R0, B0):
     """Set up the model magnetic geometry used in various GENE studies.  This

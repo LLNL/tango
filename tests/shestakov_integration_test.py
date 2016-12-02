@@ -20,16 +20,16 @@ def test_lodestro_shestakovproblem():
     lmax = 2000     # max number of iterations
     dt = 1e4       # timestep
     
-    thetaparams = {'Dmin': 1e-5,
+    thetaParams = {'Dmin': 1e-5,
                    'Dmax': 1e13,
-                   'dpdx_thresh': 10}
+                   'dpdxThreshold': 10}
     
-    lmparams = {'EWMA_param_turbflux': 0.30,
-                'EWMA_param_profile': 0.30,
-                'thetaparams': thetaparams}
+    lmParams = {'EWMAParamTurbFlux': 0.30,
+                'EWMAParamProfile': 0.30,
+                'thetaParams': thetaParams}
                 
     FluxModel = shestakov_nonlinear_diffusion.shestakov_analytic_fluxmodel(dx)
-    turbhandler = lodestro_method.TurbulenceHandler(dx, x, lmparams, FluxModel)
+    turbhandler = lodestro_method.TurbulenceHandler(dx, x, lmParams, FluxModel)
     
     # initial condition
     n = 1 - 0.5*x
@@ -52,10 +52,10 @@ def test_lodestro_shestakovproblem():
             H7 = shestakov_nonlinear_diffusion.H7contrib_Source(x)
             
             # this needs to be packaged... give n, get out H2, H3.
-            (H2, H3, data) = turbhandler.Hcontrib_TurbulentFlux(n)
+            (H2, H3, data) = turbhandler.Hcontrib_turbulent_flux(n)
                     
             # compute matrix system (A, B, C, f)
-            (A, B, C, f) = HToMatrixFD.HToMatrix(dt, dx, nL, n_mminus1, H1, H2=H2, H3=H3, H7=H7)
+            (A, B, C, f) = HToMatrixFD.H_to_matrix(dt, dx, nL, n_mminus1, H1, H2=H2, H3=H3, H7=H7)
             
             # check convergence
             #    convergence check: is || ( M[n^l] n^l - f[n^l] ) / max(abs(f)) || < tol

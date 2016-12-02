@@ -28,7 +28,7 @@ def test_diffusion_cartesian():
     H7 = 1 - x**2
     
     # solve it for steady state: only one iteration required for linear problem
-    n_final = HToMatrixFD.HToMatrixAndSolve(dt, dx, nL, n_initial, H1=H1, H2=H2, H7=H7)
+    n_final = HToMatrixFD.H_to_matrix_and_solve(dt, dx, nL, n_initial, H1=H1, H2=H2, H7=H7)
     
     # compare with analytic and plots
     n_ss_analytic = nL + 1/(12*D) * (1-x**2) * (5 - x**2)
@@ -57,7 +57,7 @@ def test_diffusion_polar():
     H2 = D*r
     H7 = r**2
     
-    n_final = HToMatrixFD.HToMatrixAndSolve(dt, dr, nL, n_initial, H1=H1, H2=H2, H7=H7 )
+    n_final = HToMatrixFD.H_to_matrix_and_solve(dt, dr, nL, n_initial, H1=H1, H2=H2, H7=H7 )
     
     # compare with analytic and plots
     n_ss_analytic = nL + 1/(9*D) * (1-r**3)
@@ -99,7 +99,7 @@ def test_diffusion_convection_time_polar():
     for m in range(1, len(tvec)):
         t = tvec[m]
         H7 = fH7(r, t)
-        n = HToMatrixFD.HToMatrixAndSolve(dt, dr, nL, n, H1=H1, H2=H2, H3=H3, H7=H7 )
+        n = HToMatrixFD.H_to_matrix_and_solve(dt, dr, nL, n, H1=H1, H2=H2, H3=H3, H7=H7 )
         
     n_final = n
     # compare with analytic and plots

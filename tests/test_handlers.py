@@ -54,9 +54,9 @@ def test_tango_checkpoint_execute():
     assert iterNumber_read == iterationNumber
     assert np.all(x == data['x'])
     assert np.all(profile == data['profile'])
-    assert np.all(x_turbgrid == data['x_turbgrid'])
-    assert np.all(profileEWMA_turbgrid == data['profileEWMA_turbgrid'])
-    assert np.all(fluxEWMA_turbgrid == data['fluxEWMA_turbgrid'])
+    assert np.all(x_turbgrid == data['xTurbGrid'])
+    assert np.all(profileEWMA_turbgrid == data['profileEWMATurbGrid'])
+    assert np.all(fluxEWMA_turbgrid == data['fluxEWMATurbGrid'])
     
     # teardown
     os.remove(filename_prof)
@@ -130,7 +130,7 @@ def test_tango_history_save_to_file():
         assert npzfile['iterationNumber'][0] == iterationNumber
     with np.load(filename_iterations) as npzfile:
         assert np.all(npzfile['profile'][1,:] == data['profile'])
-        assert np.all(npzfile['fluxEWMA_turbgrid'][0,:] == data['fluxEWMA_turbgrid'])
+        assert np.all(npzfile['fluxEWMATurbGrid'][0,:] == data['fluxEWMATurbGrid'])
     
     # teardown
     os.remove(filename_timestep)
@@ -214,9 +214,9 @@ def data_setup():
     data['x'] = np.linspace(0, 3, N_tangogrid)
     data['profile'] = np.linspace(2, 3, N_tangogrid)
     
-    data['x_turbgrid'] =np.linspace(0, 3, N_turbgrid)
-    data['profileEWMA_turbgrid'] = np.linspace(4, 6, N_turbgrid)
-    data['fluxEWMA_turbgrid'] = np.linspace(9, 9.4, N_turbgrid)
+    data['xTurbGrid'] =np.linspace(0, 3, N_turbgrid)
+    data['profileEWMATurbGrid'] = np.linspace(4, 6, N_turbgrid)
+    data['fluxEWMATurbGrid'] = np.linspace(9, 9.4, N_turbgrid)
     
     data['rmsError'] = 0.02
     return data

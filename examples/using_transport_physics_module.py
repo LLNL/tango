@@ -30,17 +30,17 @@ def initialize_diffusion_problem():
     return (L, N, dr, r, pL, p_initialcondition, D)
 
 def initialize_parameters():
-    MaxIterations = 1000
-    thetaparams = {'Dmin': 1e-5,
+    maxIterations = 1000
+    thetaParams = {'Dmin': 1e-5,
                    'Dmax': 1e13,
-                   'dpdx_thresh': 10}
-    EWMA_param_turbflux = 0.30
-    EWMA_param_profile = 0.30
-    lmparams = {'EWMA_param_turbflux': EWMA_param_turbflux,
-            'EWMA_param_profile': EWMA_param_profile,
-            'thetaparams': thetaparams}
+                   'dpdxThreshold': 10}
+    EWMAParamTurbFlux = 0.30
+    EWMAParamProfile = 0.30
+    lmParams = {'EWMAParamTurbFlux': EWMAParamTurbFlux,
+            'EWMAParamProfile': EWMAParamProfile,
+            'thetaParams': thetaParams}
     tol = 1e-7  # tol for convergence... reached when a certain error < tol
-    return (MaxIterations, lmparams, tol)
+    return (maxIterations, lmParams, tol)
 
 class ComputeAllH(object):
     def __init__(self, HcontribTransportPhysics):
@@ -118,7 +118,7 @@ logging.info("Initialization complete.")
 logging.info("Beginning time integration...")
 while solver.ok:
     # Implicit time advance: iterate to solve the nonlinear equation!
-    solver.TakeTimestep()
+    solver.take_timestep()
 
 
     
@@ -134,7 +134,7 @@ plt.plot(r, p, 'b-')
 #solution_residual = (p - pss) / np.max(np.abs(pss))
 #solution_rms_error = np.sqrt( 1/len(p) * np.sum(solution_residual**2))
 
-if solver.reached_end == True:
+if solver.reachedEnd == True:
     print("The solution has been reached successfully.")
     print("Took {} iterations".format(solver.l))
 else:

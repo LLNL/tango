@@ -17,7 +17,7 @@ Module for handling the interfacing of Tango's radial grid to another radial
   interpolation.
 """
 
-class GridInterface_TangoOutside(object):
+class GridInterfaceTangoOutside(object):
     """Class for interacing Tango's grid and GENE's grid where at the outer boundary, Tango's grid
       extends radially outward farther than GENE's.  At the inner bounadry, Tango's grid extends
       radially inward farther than GENE's.
@@ -29,22 +29,22 @@ class GridInterface_TangoOutside(object):
     coefficients on the part of Tango's grid that overlaps with GENE's grid, then add zeros where
     necessary.
     """
-    def __init__(self, psi_tango, psi_gene):
-        assert psi_tango[-1] >= psi_gene[-1]
-        self.psi_tango = psi_tango  # values of flux coordinate psi on tango's grid
-        self.psi_gene = psi_gene    # values of psi on gene's grid
-    def MapProfileOntoTurbGrid(self, profile_tango):
+    def __init__(self, psiTango, psiGene):
+        assert psiTango[-1] >= psiGene[-1]
+        self.psiTango = psiTango  # values of flux coordinate psi on tango's grid
+        self.psiGene = psiGene    # values of psi on gene's grid
+    def map_profile_onto_turb_grid(self, profileTango):
         """Since Tango's domain is larger than GENE's in both directions, we can use a simple interpolating spline to 
         resample the profile on GENE's grid.
         """
-        interpolate = scipy.interpolate.InterpolatedUnivariateSpline(self.psi_tango, profile_tango)
-        profile_gene = interpolate(self.psi_gene)
-        return profile_gene
-    def MapTransportCoeffsOntoTransportGrid(self, D_genegrid, c_genegrid):
-        D_tango = self.MapToTransportGrid(D_genegrid, enforcePositive=True)
-        c_tango = self.MapToTransportGrid(c_genegrid)
-        return (D_tango, c_tango)
-    def MapToTransportGrid(self, f_gene, enforcePositive=False):
+        interpolate = scipy.interpolate.InterpolatedUnivariateSpline(self.psiTango, profileTango)
+        profileGene = interpolate(self.psiGene)
+        return profileGene
+    def map_transport_coeffs_onto_transport_grid(self, DGeneGrid, cGeneGrid):
+        DTango = self.map_to_transport_grid(DGeneGrid, enforcePositive=True)
+        cTango = self.map_to_transport_grid(cGeneGrid)
+        return (DTango, cTango)
+    def map_to_transport_grid(self, fGene, enforcePositive=False):
         """Map a quantity f (typically a transport coefficient) from GENE's grid to tango's grid.
         
         Here, tango's grid extends further than GENE's (which occurs at both the inner boundary and the
@@ -58,20 +58,20 @@ class GridInterface_TangoOutside(object):
         can optionally enforce positivity of the returned value by zeroing out negative values.
         
         Inputs:
-          f_gene              f(psi) on the gene grid (array)
+          fGene               f(psi) on the gene grid (array)
           enforcePositive     (optional). If True, set any negative values to zero before returning (boolean)
         
         Outputs:
-          f_tango             f(psi) on the Tango grid (array)
+          fTango              f(psi) on the Tango grid (array)
         """
-        f_tango = ExtendWithZeros_BothSides(self.psi_gene, f_gene, self.psi_tango, enforcePositive=enforcePositive)
-        return f_tango
+        fTango = extend_with_zeros_both_sides(self.psiGene, fGene, self.psiTango, enforcePositive=enforcePositive)
+        return fTango
     def get_x_transport_grid(self):
-        return self.psi_tango
+        return self.psiTango
     def get_x_turbulence_grid(self):
-        return self.psi_gene
+        return self.psiGene
 
-class GridInterface_TangoInside(object):
+class GridInterfaceTangoInside(object):
     """Class for interacing Tango's grid and GENE's grid where at the outer boundary, GENE's grid
       extends radially outward farther than GENE's.  At the inner bounadry, Tango's grid extends
       radially inward farther than GENE's.
@@ -84,18 +84,18 @@ class GridInterface_TangoInside(object):
     coefficients on the part of Tango's grid that overlaps with GENE's grid, then add zeros where
     necessary.
     """
-    def __init__(self, psi_tango, psi_gene):
-        assert psi_gene[-1] >= psi_tango[-1]
-        self.psi_tango = psi_tango  # values of flux coordinate psi on tango's grid
-        self.psi_gene = psi_gene    # values of psi on gene's grid
-    def MapProfileOntoTurbGrid(self, profile_tango):
-        profile_gene = TruncateOnLeft_ExtrapolateOnRight(self.psi_tango, profile_tango, self.psi_gene, enforcePositive=True)
-        return profile_gene
-    def MapTransportCoeffsOntoTransportGrid(self, D_genegrid, c_genegrid):
-        D_tango = self.MapToTransportGrid(D_genegrid, enforcePositive=True)
-        c_tango = self.MapToTransportGrid(c_genegrid)
-        return (D_tango, c_tango)
-    def MapToTransportGrid(self, f_gene, enforcePositive=False):
+    def __init__(self, psiTango, psiGene):
+        assert psiGene[-1] >= psiTango[-1]
+        self.psiTango = psiTango  # values of flux coordinate psi on tango's grid
+        self.psiGene = psiGene    # values of psi on gene's grid
+    def map_profile_onto_turb_grid(self, profileTango):
+        profileGene = truncate_on_left_extrapolate_on_right(self.psiTango, profileTango, self.psiGene, enforcePositive=True)
+        return profileGene
+    def map_transport_coeffs_onto_transport_grid(self, DGeneGrid, cGeneGrid):
+        DTango = self.map_to_transport_grid(DGeneGrid, enforcePositive=True)
+        cTango = self.map_to_transport_grid(cGeneGrid)
+        return (DTango, cTango)
+    def map_to_transport_grid(self, fGene, enforcePositive=False):
         """Map a quantity f (typically a transport coefficient) from GENE's grid to tango's grid.
         
         Here, tango's grid extends farther radially inward than GENE's at the inner boundary, so the
@@ -110,90 +110,90 @@ class GridInterface_TangoInside(object):
         can optionally enforce positivity of the returned value by zeroing out negative values.
         
         Inputs:
-          f_gene              f(psi) on the gene grid (array)
+          fGene               f(psi) on the gene grid (array)
           enforcePositive     (optional). If True, set any negative values to zero before returning (boolean)
         
         Outputs:
-          f_tango             f(psi) on the Tango grid (array)
+          fTango             f(psi) on the Tango grid (array)
         """
-        f_tango = ExtendWithZeros_LeftSide(self.psi_gene, f_gene, self.psi_tango, enforcePositive=enforcePositive)
-        return f_tango
+        fTango = extend_with_zeros_left_side(self.psiGene, fGene, self.psiTango, enforcePositive=enforcePositive)
+        return fTango
     def get_x_transport_grid(self):
-        return self.psi_tango
+        return self.psiTango
     def get_x_turbulence_grid(self):
-        return self.psi_gene
+        return self.psiGene
         
-class GridInterface_TangoInside_fixedoutside(object):
+class GridInterfaceTangoInsideFixedOutside(object):
     """Similar to GridInterface_TangoInside.  But instead of linearly extrapolating Tango's profile on the outward side,
     a *fixed* slope in the non-overlapping region is used.  In the region where GENE's radial domain exists but Tango's
     does not, the profile is fixed for all time (where a Dirichlet boundary condition for Tango is assumed)
     
     """
-    def __init__(self, psi_tango, psi_gene, outwardslope_gene):
-        self.psi_tango = psi_tango  # values of flux coordinate psi on tango's grid
-        self.psi_gene = psi_gene    # values of psi on gene's grid
-        self.outwardslope_gene = outwardslope_gene       # imposed value of dp/dpsi in gene's outer region
-        assert outwardslope_gene < 0, "You probably meant to impose a negative, not positive, slope on the outward side."
-    def MapProfileOntoTurbGrid(self, profile_tango):
-        profile_gene = TruncateOnLeft_ExtrapolateOnRight(self.psi_tango, profile_tango, self.psi_gene, enforcePositive=True)
-        return profile_gene
-    def MapTransportCoeffsOntoTransportGrid(self, D_genegrid, c_genegrid):
-        D_tango = self.MapToTransportGrid(D_genegrid, enforcePositive=True)
-        c_tango = self.MapToTransportGrid(c_genegrid)
-        return (D_tango, c_tango)
-    def MapToTransportGrid(self, f_gene, enforcePositive=False):
-        f_tango = ExtendWithZeros_LeftSide(self.psi_gene, f_gene, self.psi_tango, enforcePositive=enforcePositive)
-        return f_tango
+    def __init__(self, psiTango, psiGene, outwardSlopeGene):
+        self.psiTango = psiTango  # values of flux coordinate psi on tango's grid
+        self.psiGene = psiGene    # values of psi on gene's grid
+        self.outwardSlopeGene = outwardSlopeGene       # imposed value of dp/dpsi in gene's outer region
+        assert outwardSlopeGene < 0, "You probably meant to impose a negative, not positive, slope on the outward side."
+    def map_profile_onto_turb_grid(self, profileTango):
+        profileGene = truncate_on_left_fixed_slope_on_right(self.psiTango, profileTango, self.psiGene, self.outwardSlopeGene, enforcePositive=True)
+        return profileGene
+    def map_transport_coeffs_onto_transport_grid(self, DGeneGrid, cGeneGrid):
+        DTango = self.map_to_transport_grid(DGeneGrid, enforcePositive=True)
+        cTango = self.map_to_transport_grid(cGeneGrid)
+        return (DTango, cTango)
+    def map_to_transport_grid(self, fGene, enforcePositive=False):
+        fTango = extend_with_zeros_left_side(self.psiGene, fGene, self.psiTango, enforcePositive=enforcePositive)
+        return fTango
     def get_x_transport_grid(self):
-        return self.psi_tango
+        return self.psiTango
     def get_x_turbulence_grid(self):
-        return self.psi_gene
+        return self.psiGene
         
 
-def ExtendWithZeros_BothSides(x_small, f_small, x_large, enforcePositive=False):
+def extend_with_zeros_both_sides(xSmall, fSmall, xLarge, enforcePositive=False):
     """Extending a function to a larger domain, with zeros where it was not originally defined.
     
-    The domain x_small should be fully contained within x_large.  That is, x_large extends farther outward
+    The domain xSmall should be fully contained within xLarge.  That is, xLarge extends farther outward
     on both sides of the domain.
     
-    This function operates by resampling within the overlapping region x_small, and then extending with zeros.
+    This function operates by resampling within the overlapping region xSmall, and then extending with zeros.
     
     Sometimes, interpolation might produce negative values when zero is the minimum for physical reasons.
         The diffusion coefficient is one example where one wants to maintain positivity.  In this case, one
         can optionally enforce positivity of the returned value by zeroing out negative values.
         
     Inputs:
-      x_small               independent variable on the smaller domain (array)
-      f_small               dependent variable on the smaller domain (array)
-      x_large               independent variable on the larger domain (array)
+      xSmall                independent variable on the smaller domain (array)
+      fSmall                dependent variable on the smaller domain (array)
+      xLarge                independent variable on the larger domain (array)
       enforcePositive       (optional) If True, set any negative values to zero before returning (boolean)
         
     Outputs:
-      f_large               dependent variable on the larger domain (array)
+      fLarge                dependent variable on the larger domain (array)
     """
-    assert x_large[0] <= x_small[0] and x_large[-1] >= x_small[-1]
+    assert xLarge[0] <= xSmall[0] and xLarge[-1] >= xSmall[-1]
     # resample within the overlapping region
-    f_large = np.zeros_like(x_large)  # initialize with zeros
-    ind = np.where(x_large > x_small[0])
+    fLarge = np.zeros_like(xLarge)  # initialize with zeros
+    ind = np.where(xLarge > xSmall[0])
     indstart = ind[0][0]
-    ind = np.where(x_large < x_small[-1])
+    ind = np.where(xLarge < xSmall[-1])
     indfinal = ind[0][-1]
-    x_large_temp = x_large[indstart : indfinal + 1]
+    xLargeTemp = xLarge[indstart : indfinal + 1]
     
-    interpolate = scipy.interpolate.InterpolatedUnivariateSpline(x_small, f_small)
-    f_large[indstart : indfinal+1] = interpolate(x_large_temp)    
+    interpolate = scipy.interpolate.InterpolatedUnivariateSpline(xSmall, fSmall)
+    fLarge[indstart : indfinal+1] = interpolate(xLargeTemp)    
     
-    # extend with zeros -- automatically performed because f_large was initialized with zeros
+    # extend with zeros -- automatically performed because fLarge was initialized with zeros
     if enforcePositive == True:
-        ind = f_large < 0
-        f_large[ind] = 0  
+        ind = fLarge < 0
+        fLarge[ind] = 0  
         
-    return f_large
+    return fLarge
 
-def ExtendWithZeros_LeftSide(x_in, f_in, x_out, enforcePositive=False):
+def extend_with_zeros_left_side(xIn, fIn, xOut, enforcePositive=False):
     """Extending a function to another domain, with zeros where it was not originally defined.
     
-    The domains x_in and x_out should satsify x_out[0] < x_in[0] and x_out[-1] < x_in[0].  The output
+    The domains xIn and xOut should satsify xOut[0] < xIn[0] and xOut[-1] < xIn[0].  The output
     domain is "to the left" of the input domain.
     
     This function operates by resampling within the overlapping region, and then extending with zeros.
@@ -203,36 +203,36 @@ def ExtendWithZeros_LeftSide(x_in, f_in, x_out, enforcePositive=False):
         can optionally enforce positivity of the returned value by zeroing out negative values.
         
     Inputs:
-      x_in                  independent variable on the input domain (array)
-      f_in                  dependent variable on the input domain (array)
-      x_out                 independent variable on the new domain (array)
+      xIn                   independent variable on the input domain (array)
+      fIn                   dependent variable on the input domain (array)
+      xOut                  independent variable on the new domain (array)
       enforcePositive       (optional) If True, set any negative values to zero before returning (boolean)
         
     Outputs:
-      f_out                 dependent variable on the new domain (array)
+      fOut                  dependent variable on the new domain (array)
     """
-    assert x_out[0] <= x_in[0] and x_out[-1] <= x_in[-1]
-    f_out = np.zeros_like(x_out)  # initialize with zeros    
+    assert xOut[0] <= xIn[0] and xOut[-1] <= xIn[-1]
+    fOut = np.zeros_like(xOut)  # initialize with zeros    
     # resample within the overlapping region
-    ind = np.where(x_out > x_in[0])
+    ind = np.where(xOut > xIn[0])
     indstart = ind[0][0]
-    x_out_temp = x_out[indstart:]
+    xOutTemp = xOut[indstart:]
     
-    interpolate = scipy.interpolate.InterpolatedUnivariateSpline(x_in, f_in)
-    f_out[indstart:] = interpolate(x_out_temp)    
+    interpolate = scipy.interpolate.InterpolatedUnivariateSpline(xIn, fIn)
+    fOut[indstart:] = interpolate(xOutTemp)    
     
-    # extend with zeros -- automatically performed because f_out was initialized with zeros
+    # extend with zeros -- automatically performed because fOut was initialized with zeros
     if enforcePositive == True:
-        ind = f_out < 0
-        f_out[ind] = 0  
+        ind = fOut < 0
+        fOut[ind] = 0  
         
-    return f_out
+    return fOut
         
         
 ###################################################
 #### Functions for extrapolation ####
         
-def LeastSquaresSlope(x, y, x0, y0):
+def least_squares_slope(x, y, x0, y0):
     """Compute the slope m of the line passing through the point (x0, y0) that gives the least squares error 
     fit to the data x,y
 
@@ -249,7 +249,7 @@ def LeastSquaresSlope(x, y, x0, y0):
     m = np.dot(x-x0, y-y0) / np.dot(x-x0, x-x0)
     return m        
     
-def Extrap1d_ConstrainedLinReg(x, y, x_eval, side='right', numPts=10):
+def extrap1d_constrained_linear_regression(x, y, xEval, side='right', numPts=10):
     """Perform extrapolation using constrained linear regression on part of the data (x,y).  Use numPts
     from either the left or right side of the data (specified by input variable side) as the input data.
     The linear regression is constrained to pass through the final point (x0, y0) (rightmost point if
@@ -258,142 +258,142 @@ def Extrap1d_ConstrainedLinReg(x, y, x_eval, side='right', numPts=10):
     Inputs:
       x                 independent variable on the smaller domain (array)
       y                 dependent variable on the smaller domain (array)
-      x_eval            values of x at which to evaluate the linear regression model
+      xEval             values of x at which to evaluate the linear regression model
       side              side of the data from which to perform linear regression ('left' or 'right')
       numPts            number of points to use in the linear regression (scalar)
     Outputs:
-      y_eval            values of dependent variable in the linear regression model evaluated at x_eval (array)
+      yEval             values of dependent variable in the linear regression model evaluated at x_eval (array)
     """
     assert side=='left' or side=='right'
     if side=='left':
-        xside = x[:numPts]
-        yside = y[:numPts]
+        xSide = x[:numPts]
+        ySide = y[:numPts]
         x0 = x[0]
         y0 = y[0]
     elif side=='right':
-        xside = x[-numPts:]
-        yside = y[-numPts:]
+        xSide = x[-numPts:]
+        ySide = y[-numPts:]
         x0 = x[-1]
         y0 = y[-1]
         
-    a = LeastSquaresSlope(xside, yside, x0, y0)  # determine model (a, x0, y0)
+    a = least_squares_slope(xSide, ySide, x0, y0)  # determine model (a, x0, y0)
     b = y0 - a*x0
     #y_eval = scipy.polyval([a,b], x_eval)
-    y_eval = a*(x_eval - x0) + y0 # evaluate model on desired points
-    return y_eval    
+    yEval = a*(xEval - x0) + y0 # evaluate model on desired points
+    return yEval    
     
     
-def MakeExtrapolator(x_small, f_small, side, numPts):
-    """Create an extrapolator that uses cubic interpolation within the given domain x_small, and linear
-    regression for extrapolation outside the given domain x_small.  Linear regression is based upon the
+def make_extrapolator(xSmall, fSmall, side, numPts):
+    """Create an extrapolator that uses cubic interpolation within the given domain xSmall, and linear
+    regression for extrapolation outside the given domain xSmall.  Linear regression is based upon the
     Npts left- or right-most points.  This function does not use linear regression for both sides of the
     given data --- only one side.  Data MUST be sorted.
     
     Inputs:
-      x_small           independent variable on the smaller domain (array)
-      f_small           dependent variable on the smaller domain (array)
+      xSmall           independent variable on the smaller domain (array)
+      fSmall           dependent variable on the smaller domain (array)
       side              side of the data from which to perform linear regression ('left' or 'right')
       numPts            number of points to use in the linear regression (scalar)
     Outputs:
       extrapolator      function that can be evaluated on a domain, like interpolators
     """
-    def extrapolator(x_large):
-        ip_interior = scipy.interpolate.InterpolatedUnivariateSpline(x_small, f_small, k=3) # cubic 
+    def extrapolator(xLarge):
+        interpolatorInterior = scipy.interpolate.InterpolatedUnivariateSpline(xSmall, fSmall, k=3) # cubic 
         
         # extrapolated points: linear regression
-        f_large = Extrap1d_ConstrainedLinReg(x_small, f_small, x_large, side, numPts=numPts)
+        fLarge = extrap1d_constrained_linear_regression(xSmall, fSmall, xLarge, side, numPts=numPts)
         
         # interpolated points in the interior using cubic interpolation
-        ind = (x_large > x_small[0]) & (x_large < x_small[-1])
-        f_large[ind] = ip_interior(x_large[ind])
+        ind = (xLarge > xSmall[0]) & (xLarge < xSmall[-1])
+        fLarge[ind] = interpolatorInterior(xLarge[ind])
     
-        return f_large
+        return fLarge
     return extrapolator    
 
-def TruncateOnLeft_ExtrapolateOnRight(x_in, f_in, x_out, numPts=10, enforcePositive=False):
-    """Map f_in from a 1D domain x_in to another domain x_out.  To be used when x_out[0] > x_in[0]
-      and x_out[-1] > x_in[-1].  On the left side of the domain, where x_out is contained within
-      x_in, f_in is truncated.  On the right side of the domain, where x_out is not contained within
-      x_in, f_in is extrapolated.
+def truncate_on_left_extrapolate_on_right(xIn, fIn, xOut, numPts=10, enforcePositive=False):
+    """Map fIn from a 1D domain xIn to another domain xOut.  To be used when xOut[0] > xIn[0]
+      and xOut[-1] > xIn[-1].  On the left side of the domain, where xOut is contained within
+      xIn, fIn is truncated.  On the right side of the domain, where xOut is not contained within
+      xIn, fIn is extrapolated.
     
-    The output, f_out, is defined on the x_out grid.  In the region of overlap, f_out is just f_in 
+    The output, fOut, is defined on the xOut grid.  In the region of overlap, fOut is just fIn 
     resampled using cubic interpolation.  Outside the region of overlap, on the right boundary,
-    f_out is determined by linear extrapolation of the last two points of f_in.
+    fOut is determined by linear extrapolation of the last two points of fIn.
     
     Inputs:
-      x_in                  independent variable on the input domain (array)
-      f_in                  dependent variable on the input domain (array)
-      x_out                 independent variable on the new domain (array)
+      xIn                  independent variable on the input domain (array)
+      fIn                  dependent variable on the input domain (array)
+      xOut                 independent variable on the new domain (array)
       numPts
       enforcePositive       (optional) If True, set any negative values to zero before returning (boolean)
     
     Outputs:
-      f_out                 dependent variable on the new domain (array)
+      fOut                 dependent variable on the new domain (array)
     """
-    assert x_out[0] >= x_in[0] and x_out[-1] >= x_in[-1]
-    extrapolator = MakeExtrapolator(x_in, f_in, side='right', numPts=numPts)
-    f_out = extrapolator(x_out)
+    assert xOut[0] >= xIn[0] and xOut[-1] >= xIn[-1]
+    extrapolator = make_extrapolator(xIn, fIn, side='right', numPts=numPts)
+    fOut = extrapolator(xOut)
     
     if enforcePositive == True:
-        ind = f_out < 0
-        f_out[ind] = 0
+        ind = fOut < 0
+        fOut[ind] = 0
     
-    return f_out
+    return fOut
 
-def MakeExtrapolator_fixedslope(x_small, f_small, outwardSlope):
-    """Create an extrapolator that uses cubic interpolation within the given domain x_small, and an
-    imposed linear fit with imposed slope outside the given domain x_small.  Data must be sorted.
+def make_extrapolator_fixed_slope(xSmall, fSmall, outwardSlope):
+    """Create an extrapolator that uses cubic interpolation within the given domain xSmall, and an
+    imposed linear fit with imposed slope outside the given domain xSmall.  Data must be sorted.
     
     Inputs:
-      x_small           independent variable on the smaller domain (array)
-      f_small           dependent variable on the smaller domain (array)
-      outwardSlope      imposed slope outside the domain x_small
+      xSmall           independent variable on the smaller domain (array)
+      fSmall           dependent variable on the smaller domain (array)
+      outwardSlope      imposed slope outside the domain xSmall
     Outputs:
       extrapolator      function that can be evaluated on a domain, like interpolators
     """
-    def extrapolator(x_large):
-        f_large = np.zeros_like(x_large, dtype=np.float)
+    def extrapolator(xLarge):
+        fLarge = np.zeros_like(xLarge, dtype=np.float)
         # exterior region: left side
-        ind_leftexterior = x_large < x_small[0]
-        f_large[ind_leftexterior] = outwardSlope * (x_large[ind_leftexterior] - x_small[0]) + f_small[0]
+        indLeftExterior = xLarge < xSmall[0]
+        fLarge[indLeftExterior] = outwardSlope * (xLarge[indLeftExterior] - xSmall[0]) + fSmall[0]
         
         #exterior region: right side
-        ind_rightexterior = x_large > x_small[-1]
-        f_large[ind_rightexterior] = outwardSlope * (x_large[ind_rightexterior] - x_small[-1]) + f_small[-1]
+        indRightExterior = xLarge > xSmall[-1]
+        fLarge[indRightExterior] = outwardSlope * (xLarge[indRightExterior] - xSmall[-1]) + fSmall[-1]
         
         # interpolated points in the interior using cubic interpolation
-        ip_interior = scipy.interpolate.InterpolatedUnivariateSpline(x_small, f_small, k=3) # cubic 
-        ind_interior = (x_large >= x_small[0]) & (x_large <= x_small[-1])
-        f_large[ind_interior] = ip_interior(x_large[ind_interior])
-        return f_large
+        interpolatorInterior = scipy.interpolate.InterpolatedUnivariateSpline(xSmall, fSmall, k=3) # cubic 
+        indInterior = (xLarge >= xSmall[0]) & (xLarge <= xSmall[-1])
+        fLarge[indInterior] = interpolatorInterior(xLarge[indInterior])
+        return fLarge
     return extrapolator   
 
-def TruncateOnLeft_FixedSlopeOnRight(x_in, f_in, x_out, outwardSlope, enforcePositive=False):
-    """Map f_in from a 1D domain x_in to another domain x_out.  To be used when x_out[0] > x_in[0]
-      and x_out[-1] > x_in[-1].  On the left side of the domain, where x_out is contained within
-      x_in, f_in is truncated.  On the right side of the domain, where x_out is not contained within
-      x_in, f_out is set to a fixed profile --- linear in this case.
+def truncate_on_left_fixed_slope_on_right(xIn, fIn, xOut, outwardSlope, enforcePositive=False):
+    """Map fIn from a 1D domain xIn to another domain xOut.  To be used when xOut[0] > xIn[0]
+      and xOut[-1] > xIn[-1].  On the left side of the domain, where xOut is contained within
+      xIn, fIn is truncated.  On the right side of the domain, where xOut is not contained within
+      xIn, fOut is set to a fixed profile --- linear in this case.
     
-    The output, f_out, is defined on the x_out grid.  In the region of overlap, f_out is just f_in 
+    The output, fOut, is defined on the xOut grid.  In the region of overlap, fOut is just fIn 
     resampled using cubic interpolation.  Outside the region of overlap, on the right boundary,
-    f_out is determined by the last point of f_in, and an imposed slope.
+    fOut is determined by the last point of fIn, and an imposed slope.
     
     Inputs:
-      x_in                  independent variable on the input domain (array)
-      f_in                  dependent variable on the input domain (array)
-      x_out                 independent variable on the new domain (array)
-      outwardSlope          imposed value of the slope determining f_out on the right side
+      xIn                   independent variable on the input domain (array)
+      fIn                   dependent variable on the input domain (array)
+      xOut                  independent variable on the new domain (array)
+      outwardSlope          imposed value of the slope determining fOut on the right side
       enforcePositive       (optional) If True, set any negative values to zero before returning (boolean)
     
     Outputs:
-      f_out                 dependent variable on the new domain (array)
+      fOut                 dependent variable on the new domain (array)
     """
-    assert x_out[0] >= x_in[0] and x_out[-1] >= x_in[-1]
-    extrapolator = MakeExtrapolator_fixedslope(x_in, f_in, outwardSlope)
-    f_out = extrapolator(x_out)
+    assert xOut[0] >= xIn[0] and xOut[-1] >= xIn[-1]
+    extrapolator = make_extrapolator_fixed_slope(xIn, fIn, outwardSlope)
+    fOut = extrapolator(xOut)
     
     if enforcePositive == True:
-        ind = f_out < 0
-        f_out[ind] = 0
+        ind = fOut < 0
+        fOut[ind] = 0
     
-    return f_out
+    return fOut

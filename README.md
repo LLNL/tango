@@ -13,6 +13,13 @@ The user specifies a basename and the files are saved with a suffix `#_timestep`
 
 Instead of saving all possible arrays, the user specifies which arrays are saved to file.  This allows to save disk space while still allowing flexibility in case the full storage of all arrays is desired.
 
+## Source Code Style Convention
+Capitalization and underscores:
+* `ClassName`: Camel Case with each word capitalized
+* `function_name` or `method_name`: lower case, with underscore between words
+* `variableName` or `objectName`: Camel case with each word after the first capitalized
+At times, there are exceptions to this general rule.  Typically this will occur in variables closely related to mathematical notation, where capitalization to conform to mathematical convention is appropriate.  Rarely, underscores are used outside of function names.
+
 
 ## History
 * v0.15: More modular design with examples and tests

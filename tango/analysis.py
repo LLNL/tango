@@ -3,6 +3,7 @@
 from __future__ import division
 import numpy as np
 import matplotlib
+matplotlib.use('qt5agg')  # workaround for a bug in recent Anaconda build of matplotlib
 import matplotlib.pyplot as plt
 from . import physics_to_H
 
@@ -15,42 +16,41 @@ Module for performing data analysis on saved files
         
 class TimestepData(object):
     def __init__(self, basename):
-        data_timestep = LoadNPZFile(basename + "_timestep")
-        data_iterations = LoadNPZFile(basename + "_iterations")
+        dataTimestep = load_NPZ_file(basename + "_timestep")
+        dataIterations = load_NPZ_file(basename + "_iterations")
         
-        # data for the whole timestep
-        for varname in data_timestep:
-            setattr(self, varname, data_timestep[varname])
+        # data for the whole timestep: save dict into member variables
+        for varname in dataTimestep:
+            setattr(self, varname, dataTimestep[varname])
 
         # also, store the dicts
-        self.data_timestep = data_timestep     
-        self.data_iterations = data_iterations
-    def GetFirstIteration(self):
-        return IterationData(0, self.data_timestep, self.data_iterations)
-        pass
-    def GetLastIteration(self):
-        Niters = len(self.iteration_number)
-        return IterationData(Niters-1, self.data_timestep, self.data_iterations)
+        self.dataTimestep = dataTimestep     
+        self.dataIterations = dataIterations
+    def get_first_iteration(self):
+        return IterationData(0, self.dataTimestep, self.dataIterations)
+    def get_last_iteration(self):
+        Niters = len(self.iterationNumber)
+        return IterationData(Niters-1, self.dataTimestep, self.dataIterations)
 
-    def GetNthIteration(self, N):
-        return IterationData(N, self.data_timestep, self.data_iterations)
+    def get_nth_iteration(self, N):
+        return IterationData(N, self.dataTimestep, self.dataIterations)
         
-    def Profile_NthIteration(self, N):
+    def profile_nth_iteration(self, N):
         """Provide a shortcut to returning the Nth iteration of the profile without having to instantiate an Iteration object
         """
-        return self.data_iterations['profile'][N, :]
+        return self.dataIterations['profile'][N, :]
         
         
     
     ################################################################
     ## Accessors to retrieve available data
-    def AvailableTimestepFields(self):
+    def available_timestep_fields(self):
         """return a list of all data for the whole timestep"""
-        return self.data_timestep.keys()
+        return self.dataTimestep.keys()
     
-    def AvailableSolutionFields(self):
+    def available_solution_fields(self):
         """Return a list of all attributes in solution data that is available (data that changes each iteration)"""
-        return self.data_iterations.keys()
+        return self.dataIterations.keys()
     
     @property
     def psi(self):
@@ -58,12 +58,12 @@ class TimestepData(object):
         return self.x
     
     ### Plotting Routines
-    def PlotErrhistory(self, savename=None):
+    def plot_err_history(self, savename=None):
         """Plot the self-consistency error vs. iteration number for this timestep.
         Optionally, save the figure to a file.
         """
         fig = plt.figure()
-        plt.semilogy(self.iteration_number, self.errhistory)
+        plt.semilogy(self.iterationNumber, self.errHistory)
         plt.xlabel('Iteration Number')
         plt.ylabel('self-consistency error (rms)')
         if savename is not None:
@@ -72,52 +72,54 @@ class TimestepData(object):
         
 
 class IterationData(object):
-    def __init__(self, iteration_counter, data_timestep, data_iterations):
+    def __init__(self, iterationCounter, dataTimestep, dataIterations):
         """Create an object to represent the data from a single iteration.
         
         Inputs:
-          iteration_counter     iteration to retrieve data from (integer)
-          data_timestep         constant or 0D data that may change each iteration (dict)
-          data_iterations       1D array data that changes each iteration (dict)
+          iterationCounter      iteration to retrieve data from (integer)
+          dataTimestep          constant or 0D data that may change each iteration (dict)
+          dataIterations        1D array data that changes each iteration (dict)
         """
-        self.iteration_counter = iteration_counter 
-        self.data_timestep = data_timestep
+        self.iterationCounter = iterationCounter 
+        self.dataTimestep = dataTimestep
         # data for the whole timestep--should always be there
             # scalars
-        for varname in data_timestep:
-            # special handling for iteration_number and errhistory where we want a particular iteration from the history
-            if varname == 'iteration_number':
-                self.l = data_timestep['iteration_number'][iteration_counter]
-            elif varname == 'errhistory':
-                self.err = data_timestep['errhistory'][iteration_counter]
+        for varname in dataTimestep:
+            # special handling for iterationNumber and errHistory where we want a particular iteration from the history
+            if varname == 'iterationNumber':
+                self.l = dataTimestep['iterationNumber'][iterationCounter]
+            elif varname == 'errHistory':
+                self.err = dataTimestep['errHistory'][iterationCounter]
             else:  # save everything else
-                setattr(self, varname, data_timestep[varname])
+                setattr(self, varname, dataTimestep[varname])
        
         
         self.data = {}
         # store all 1D data from the specified iteration 
-        for varname in data_iterations:
-            self.data[varname] = data_iterations[varname][iteration_counter, :]
+        for varname in dataIterations:
+            self.data[varname] = dataIterations[varname][iterationCounter, :]
             # also save into self as an attribute for direct access
             setattr(self, varname, self.data[varname])
 
         
-    def AvailableTimestepFields(self):
+    def available_timestep_fields(self):
         """return a list of all data for the whole timestep"""
-        timestep_fields = self.data_timestep.keys()
-        if 'iteration_number' in timestep_fields:
-            timestep_fields.remove('iteration_number')
-            timestep_fields.append('l')
-        if 'errhistory' in timestep_fields:
-            timestep_fields.remove('errhistory')
-            timestep_fields.append('err')
-        return timestep_fields
+        timestepFields = self.dataTimestep.keys()
         
-    def AvailableSolutionFields(self):
+        # rename a couple of fields
+        if 'iterationNumber' in timestepFields:
+            timestepFields.remove('iterationNumber')
+            timestepFields.append('l')
+        if 'errHistory' in timestepFields:
+            timestepFields.remove('errHistory')
+            timestepFields.append('err')
+        return timestepFields
+        
+    def available_solution_fields(self):
         """Return a list of all attributes in solution data that is available (data that changes each iteration)"""
         return self.data.keys()
     
-    def AllAvailableFields(self):
+    def all_available_fields(self):
         """return a list of all attributes, excluding internal attributes, dicts, and methods.
         
         This list is almost identical to the union of AvailableTimestepFields and AvailableSolutionFields."""
@@ -131,20 +133,20 @@ class IterationData(object):
     
     ################################################################
     ### Data Analysis Routines
-    def GeometrizedDiffusionCoefficient(self):
-        D = physics_to_H.HToGeometrizedDiffusionCoeff(self.H2, self.Vprime)
+    def geometrized_diffusion_coefficient(self):
+        D = physics_to_H.H_to_geometrized_diffusion_coeff(self.H2, self.Vprime)
         return D
     
-    def DiffusionCoefficient(self):
-        chi = physics_to_H.HToDiffusivity(self.H2, self.Vprime, self.gradpsisq)
+    def diffusion_coefficient(self):
+        chi = physics_to_H.H_to_diffusivity(self.H2, self.Vprime, self.gradpsisq)
         return chi
         
-    def GeometrizedConvectionCoefficient(self):
-        c = physics_to_H.HToGeometrizedConvectionCoeff(self.H3, self.Vprime)
+    def geometrized_convection_coefficient(self):
+        c = physics_to_H.H_to_geometrized_convection_coeff(self.H3, self.Vprime)
         return c
         
-    def ConvectionCoefficient(self):
-        vbar = physics_to_H.HToConvectionCoeff(self.H3, self.Vprime, self.gradpsisq)
+    def convection_coefficient(self):
+        vbar = physics_to_H.H_to_convection_coeff(self.H3, self.Vprime, self.gradpsisq)
         return vbar
     
     ################################################################
@@ -153,7 +155,7 @@ class IterationData(object):
     
     ################################################################
     ### Plotting Routines
-    def PlotProfile(self, savename=None):
+    def plot_profile(self, savename=None):
         """Plt the profile at this iteration.  Optionally, save the figure to a file."""
         fig=plt.figure()
         plt.plot(self.psi, self.profile)
@@ -162,7 +164,7 @@ class IterationData(object):
         if savename is not None:
             fig.savefig(savename, bbox_inches='tight')
         return fig
-    def PlotProfileAndStartingProfile(self, savename=None):
+    def plot_profile_and_starting_profile(self, savename=None):
         """Plot the profile at this iteration along with the profile at the beginning of the timestep.
         Optionally, save the figure to a file."""
         fig=plt.figure()
@@ -175,7 +177,7 @@ class IterationData(object):
             fig.savefig(savename, bbox_inches='tight')
         return fig
  
-def LoadNPZFile(input_filename):
+def load_NPZ_file(input_filename):
     """Open a file (adding a .npz extension if not present), retrieve the data, then close the file
     
     Note that when numpy loads an npz file, it uses a lazy form of loading, where the storage for a specific

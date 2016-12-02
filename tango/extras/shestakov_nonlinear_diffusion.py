@@ -16,8 +16,8 @@ class shestakov_analytic_fluxmodel(object):
     def __init__(self, dx):
         self.dx = dx
     
-    def GetFlux(self, n):
-        return GetFlux(n, self.dx)
+    def get_flux(self, n):
+        return get_flux(n, self.dx)
     
     
     
@@ -30,7 +30,7 @@ def H7contrib_Source(x):
     return H7
 
 
-def GetFlux(n, dx):
+def get_flux(n, dx):
     """Test problem from Shestakov et al. (2003)
     Return the flux Gamma, which depends on the density profile n as follows:
        Gamma[n] = -(dn/dx)^3 / n^2

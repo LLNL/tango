@@ -6,56 +6,56 @@ import os
 from tango import datasaver
 
 def test_AddData():
-    MaxIterations=15
-    NumPts = 20
-    arrays_to_save = ['H2', 'H3']
-    DataSaver = datasaver.dataSaver(MaxIterations, arrays_to_save)
-    H2 = np.linspace(1, 2, NumPts)
-    H3 = np.linspace(4, 5, NumPts)
+    maxIterations=15
+    numPts = 20
+    arraysToSave = ['H2', 'H3']
+    dataSaver = datasaver.DataSaver(maxIterations, arraysToSave)
+    H2 = np.linspace(1, 2, numPts)
+    H3 = np.linspace(4, 5, numPts)
     H4 = np.linspace(4, 5, 30)
     data = {'H2': H2, 'H3': H3, 'H4': H4}
-    DataSaver.AddData(data, 1)
-    DataSaver.AddData(data, 2)
+    dataSaver.add_data(data, 1)
+    dataSaver.add_data(data, 2)
     
-    assert DataSaver.counter == 2
-    assert DataSaver.data_all_iterations['H3'][1, 19] == 5
-    assert DataSaver.iteration_number[0] == 1
+    assert dataSaver.countStoredIterations == 2
+    assert dataSaver.dataAllIterations['H3'][1, 19] == 5
+    assert dataSaver.iterationNumber[0] == 1
 
 def test_FinalizeData():
-    MaxIterations=15
-    NumPts = 20
-    arrays_to_save = ['H2', 'H3']
-    DataSaver = datasaver.dataSaver(MaxIterations, arrays_to_save)
-    H2 = np.linspace(1, 2, NumPts)
-    H3 = np.linspace(4, 5, NumPts)
-    H4 = np.linspace(4, 5, NumPts)
+    maxIterations=15
+    numPts = 20
+    arraysToSave = ['H2', 'H3']
+    dataSaver = datasaver.DataSaver(maxIterations, arraysToSave)
+    H2 = np.linspace(1, 2, numPts)
+    H3 = np.linspace(4, 5, numPts)
+    H4 = np.linspace(4, 5, numPts)
     data = {'H2': H2, 'H3': H3, 'H4': H4}
-    DataSaver.AddData(data, 1)
-    DataSaver.AddData(data, 2)
+    dataSaver.add_data(data, 1)
+    dataSaver.add_data(data, 2)
     
-    assert DataSaver.data_all_iterations['H2'].shape == (MaxIterations, NumPts)
-    DataSaver._FinalizeData()
-    assert DataSaver.data_all_iterations['H2'].shape == (2, NumPts)
-    assert len(DataSaver.iteration_number) == 2
+    assert dataSaver.dataAllIterations['H2'].shape == (maxIterations, numPts)
+    dataSaver._finalize_data()
+    assert dataSaver.dataAllIterations['H2'].shape == (2, numPts)
+    assert len(dataSaver.iterationNumber) == 2
 
-    DataSaver.finalized == True
+    dataSaver.finalized == True
     
 def test_SaveToFile():
-    MaxIterations=15
-    NumPts = 20
-    arrays_to_save = ['H2', 'H3']
-    psi = np.linspace(0, 1, NumPts)
-    Vprime = np.ones(NumPts)
-    one_off_data = {'psi': psi, 'Vprime': Vprime}
-    DataSaver = datasaver.dataSaver(MaxIterations, arrays_to_save)
-    DataSaver.AddOneOffData(one_off_data)
-    H2 = np.linspace(1, 2, NumPts)
-    H3 = np.linspace(4, 5, NumPts)
+    maxIterations=15
+    numPts = 20
+    arraysToSave = ['H2', 'H3']
+    psi = np.linspace(0, 1, numPts)
+    Vprime = np.ones(numPts)
+    oneOffData = {'psi': psi, 'Vprime': Vprime}
+    dataSaver = datasaver.DataSaver(maxIterations, arraysToSave)
+    dataSaver.add_one_off_data(oneOffData)
+    H2 = np.linspace(1, 2, numPts)
+    H3 = np.linspace(4, 5, numPts)
     data = {'H2': H2, 'H3': H3}
-    DataSaver.AddData(data, 1)
-    DataSaver.AddData(data, 2)
+    dataSaver.add_data(data, 1)
+    dataSaver.add_data(data, 2)
     
-    DataSaver.SaveToFile('testsave')
+    dataSaver.save_to_file('testsave')
     
     with np.load('testsave_timestep.npz') as npzfile:
     # check the one_off_data got saved and then check H2 H3
@@ -70,20 +70,20 @@ def test_SaveToFile():
     os.remove('testsave_iterations.npz')
 
 def test_ResetData():
-    MaxIterations=15
-    NumPts = 20
-    arrays_to_save = ['H2', 'H3']
-    DataSaver = datasaver.dataSaver(MaxIterations, arrays_to_save)
-    H2 = np.linspace(1, 2, NumPts)
-    H3 = np.linspace(4, 5, NumPts)
+    maxIterations=15
+    numPts = 20
+    arraysToSave = ['H2', 'H3']
+    dataSaver = datasaver.DataSaver(maxIterations, arraysToSave)
+    H2 = np.linspace(1, 2, numPts)
+    H3 = np.linspace(4, 5, numPts)
     data = {'H2': H2, 'H3': H3}
-    DataSaver.AddData(data, 1)
-    DataSaver.AddData(data, 2)
+    dataSaver.add_data(data, 1)
+    dataSaver.add_data(data, 2)
     
-    assert np.all(DataSaver.data_all_iterations['H2'][1,:] == H2)
-    DataSaver.ResetForNextTimestep()
-    assert DataSaver.counter == 0
-    assert DataSaver.finalized == False
-    assert DataSaver.one_off_data == {}
-    assert np.all(DataSaver.iteration_number == np.zeros(MaxIterations))
-    assert DataSaver.data_all_iterations == {}
+    assert np.all(dataSaver.dataAllIterations['H2'][1,:] == H2)
+    dataSaver.reset_for_next_timestep()
+    assert dataSaver.countStoredIterations == 0
+    assert dataSaver.finalized == False
+    assert dataSaver.oneOffData == {}
+    assert np.all(dataSaver.iterationNumber == np.zeros(maxIterations))
+    assert dataSaver.dataAllIterations == {}

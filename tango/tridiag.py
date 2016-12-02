@@ -69,7 +69,7 @@ def solve(A, B, C, D):
     
     """
     
-def IsDiagonallyDominant(A, B, C):
+def is_diagonally_dominant(A, B, C):
     """The Thomas Algorithm is only guaranteed to be stable if the matrix is diagonally dominant.  This requires
 
                             |B_j| > |A_j| + |C_j|,  for all j.

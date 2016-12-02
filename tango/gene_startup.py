@@ -61,7 +61,7 @@ def pseudo_setup_gene_run(psiTango, psiGene, minorRadius, majorRadius, B0, ionMa
     MPIrank = 0
     
     class GeneFluxModel(object):
-        def GetFlux(self):  # turbhandler requires that a FluxModel has a GetFlux() method
+        def get_flux(self):  # turbhandler requires that a FluxModel has a get_flux() method
             pass
         def set_simulation_time(self, simulationTime):  # this method  is also required
             pass

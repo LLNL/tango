@@ -16,7 +16,7 @@ def test_handler_single_timestep():
 
     while solver.ok:
         # Implicit time advance: iterate to solve the nonlinear equation!
-        solver.TakeTimestep()
+        solver.take_timestep()
         
     checkpointProfName = 'checkpoint_test_prof.txt'    
     checkpointEWMAName = 'checkpoint_test_ewma.txt'
@@ -45,7 +45,7 @@ def test_handler_multiple_files():
 
     while solver.ok:
         # Implicit time advance: iterate to solve the nonlinear equation!
-        solver.TakeTimestep()
+        solver.take_timestep()
     
     checkpointProfName = 'checkpoint_test_prof.txt'    
     checkpointEWMAName = 'checkpoint_test_ewma.txt'
@@ -88,17 +88,17 @@ def initialize_shestakov_problem():
     return (L, N, dx, x, nL, n_initialcondition)
 
 def initialize_parameters():
-    MaxIterations = 1000
-    thetaparams = {'Dmin': 1e-5,
+    maxIterations = 1000
+    thetaParams = {'Dmin': 1e-5,
                    'Dmax': 1e13,
-                   'dpdx_thresh': 10}
-    EWMA_param_turbflux = 0.30
-    EWMA_param_profile = 0.30
-    lmparams = {'EWMA_param_turbflux': EWMA_param_turbflux,
-            'EWMA_param_profile': EWMA_param_profile,
-            'thetaparams': thetaparams}
+                   'dpdxThreshold': 10}
+    EWMAParamTurbFlux = 0.30
+    EWMAParamProfile = 0.30
+    lmParams = {'EWMAParamTurbFlux': EWMAParamTurbFlux,
+            'EWMAParamProfile': EWMAParamProfile,
+            'thetaParams': thetaParams}
     tol = 1e-11  # tol for convergence... reached when a certain error < tol
-    return (MaxIterations, lmparams, tol)
+    return (maxIterations, lmParams, tol)
 
 def setup_handlers():
     checkpointInterval = 11
@@ -114,7 +114,7 @@ class ComputeAllH(object):
         # Define the contributions to the H coefficients for the Shestakov Problem
         H1 = np.ones_like(x)
         H7 = shestakov_nonlinear_diffusion.H7contrib_Source(x)
-        (H2, H3, extradata) = self.turbhandler.Hcontrib_TurbulentFlux(n)
+        (H2, H3, extradata) = self.turbhandler.Hcontrib_turbulent_flux(n)
         H4 = None
         H6 = None
         return (H1, H2, H3, H4, H6, H7, extradata)

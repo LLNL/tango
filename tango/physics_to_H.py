@@ -247,7 +247,7 @@ def H_to_diffusivity(H2, Vprime, gradpsisq):
     chi = geometrized_diffusion_coeff_to_diffusivity(D, gradpsisq)
     return chi
 
-def HToConvectionCoeff(H3, Vprime, gradpsisq):
+def H_to_convection_coeff(H3, Vprime, gradpsisq):
     """Convert H3 coefficient to effective convection coefficient.
     """
     c = H_to_geometrized_convection_coeff(H3, Vprime)
