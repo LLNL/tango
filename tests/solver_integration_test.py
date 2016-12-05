@@ -8,8 +8,8 @@ import os
 
 def test_solver_basic():
     # test the use of solver class
-    (L, N, dx, x, nL, n, MaxIterations, tol, turbhandler, compute_all_H, t_array) = problem_setup()
-    solver = tng.solver.solver(L, x, n, nL, t_array, MaxIterations, tol, compute_all_H, turbhandler)
+    (L, N, dx, x, nL, n, maxIterations, tol, turbhandler, compute_all_H, t_array) = problem_setup()
+    solver = tng.solver.Solver(L, x, n, nL, t_array, maxIterations, tol, compute_all_H, turbhandler)
     
     # set up data logger
     while solver.ok:
@@ -29,13 +29,13 @@ def test_solver_basic():
 
 def test_solver_single_timestep():
     # test the use of solver class with data logger --- single timestep
-    (L, N, dx, x, nL, n, MaxIterations, tol, turbhandler, compute_all_H, t_array) = problem_setup()
-    solver = tng.solver.solver(L, x, n, nL, t_array, MaxIterations, tol, compute_all_H, turbhandler)
+    (L, N, dx, x, nL, n, maxIterations, tol, turbhandler, compute_all_H, t_array) = problem_setup()
+    solver = tng.solver.Solver(L, x, n, nL, t_array, maxIterations, tol, compute_all_H, turbhandler)
     
     # set up data logger
     arrays_to_save = ['H2', 'H3', 'profile']
     databasename = 'test_integration_data'
-    solver.dataSaverHandler.initialize_datasaver(databasename, MaxIterations, arrays_to_save)
+    solver.dataSaverHandler.initialize_datasaver(databasename, maxIterations, arrays_to_save)
     while solver.ok:
         # Implicit time advance: iterate to solve the nonlinear equation!
         solver.take_timestep()
@@ -54,14 +54,14 @@ def test_solver_single_timestep():
 
 def test_solver_multiple_files():
     # test the use of solver class with data logger --- multiple files from multiple timesteps
-    (L, N, dx, x, nL, n, MaxIterations, tol, turbhandler, compute_all_H, t_array) = problem_setup()
+    (L, N, dx, x, nL, n, maxIterations, tol, turbhandler, compute_all_H, t_array) = problem_setup()
     t_array = np.array([0, 1.0, 1e4])
-    solver = tng.solver.solver(L, x, n, nL, t_array, MaxIterations, tol, compute_all_H, turbhandler)
+    solver = tng.solver.Solver(L, x, n, nL, t_array, maxIterations, tol, compute_all_H, turbhandler)
     
     # set up data logger
     arrays_to_save = ['H2', 'H3', 'profile']
     databasename = 'test_integration_data'
-    solver.dataSaverHandler.initialize_datasaver(databasename, MaxIterations, arrays_to_save)
+    solver.dataSaverHandler.initialize_datasaver(databasename, maxIterations, arrays_to_save)
     while solver.ok:
         # Implicit time advance: iterate to solve the nonlinear equation!
         solver.take_timestep()
@@ -84,9 +84,9 @@ def test_solver_multiple_files():
 
 def test_solver_not_converging():
     # test that data is stored even when solution does not converge within MaxIterations
-    (L, N, dx, x, nL, n, MaxIterations, tol, turbhandler, compute_all_H, t_array) = problem_setup()
+    (L, N, dx, x, nL, n, maxIterations, tol, turbhandler, compute_all_H, t_array) = problem_setup()
     maxIterations = 100  # takes 170 iterations to converge for these parameters
-    solver = tng.solver.solver(L, x, n, nL, t_array, maxIterations, tol, compute_all_H, turbhandler)
+    solver = tng.solver.Solver(L, x, n, nL, t_array, maxIterations, tol, compute_all_H, turbhandler)
     
     # set up data logger
     arraysToSave = ['H2', 'H3', 'profile']

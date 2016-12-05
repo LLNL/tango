@@ -4,9 +4,10 @@ from .lodestro_method import TurbulenceHandler
 from .HToMatrixFD import H_to_matrix, solve
 from . import datasaver
 from . import solver
-from . import analysis
 from . import physics
 from . import physics_to_H
 from . import interfacegrids_gene
+
+#from . import analysis
 #from . import gene_startup
 #from .interfacegrids_gene import gridsinterface

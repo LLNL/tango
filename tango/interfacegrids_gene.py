@@ -1,21 +1,21 @@
-"""See https://github.com/LLNL/tango for copyright and license information"""
+"""
+interfacegrids_gene
+
+Module for handling the interfacing of Tango's radial grid to another radial
+grid.  For example, GENE performs computations on its own radial grid.  This
+radial grid may have a different domain than Tango, either larger or smaller,
+in which case to connect one grid to the other requires extrapolation or
+truncation.  Furthermore, the GENE radial grid might be finer than Tango's
+radial grid, in which case interfacing requires coarse graining or
+interpolation.
+
+See https://github.com/LLNL/tango for copyright and license information
+"""
 
 from __future__ import division
 import numpy as np
 import scipy.interpolate
 import scipy
-
-"""
-module interfacegrids_gene
-
-Module for handling the interfacing of Tango's radial grid to another radial
-  grid.  For example, GENE performs computations on its own radial grid.  This
-  radial grid may have a different domain than Tango, either larger or smaller,
-  in which case to connect one grid to the other requires extrapolation or
-  truncation.  Furthermore, the GENE radial grid might be finer than Tango's
-  radial grid, in which case interfacing requires coarse graining or
-  interpolation.
-"""
 
 class GridInterfaceTangoOutside(object):
     """Class for interacing Tango's grid and GENE's grid where at the outer boundary, Tango's grid

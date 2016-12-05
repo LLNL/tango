@@ -151,7 +151,7 @@ tangoHistoryHandler = tango.handlers.TangoHistoryHandler(iterationInterval=50, b
 # specify how long GENE runs between Tango iterations.  Specified in 
 geneFluxModel.set_simulation_time(500)
 
-solver = tango.solver.solver(L, psi, pressureIC, pressureRightBC, t_array, maxIterations, tol, compute_all_H, turbhandler)
+solver = tango.solver.Solver(L, psi, pressureIC, pressureRightBC, t_array, maxIterations, tol, compute_all_H, turbhandler)
 
 ## Set up the file handling 
 parallelEnvironment = True

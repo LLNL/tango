@@ -1,11 +1,13 @@
-"""See https://github.com/LLNL/tango for copyright and license information"""
+"""
+genecomm_unitconversion
+
+Provides conversions between GENE's normalized units and SI units.
+
+See https://github.com/LLNL/tango for copyright and license information
+"""
 
 from __future__ import division
 import numpy as np
-
-"""
-Provides conversions between GENE's normalized units and SI units.
-"""
 
 # physical constants with module-wide scope.  Given in SI units
 e = 1.60217662e-19          # electron charge
@@ -156,3 +158,22 @@ def Q_ref(nref, Tref, mref, Bref, Lref):
     
     Qref = nref * Tref_SI * cref * rhoref**2 / Lref**2
     return Qref
+    
+def calculate_consistent_rhostar(Tref, Bref, mref, minorRadius):
+    """Compute a self-consistent rhostar, given Tref, mref, Bref, and minor radius.
+    
+       rhostar = rhoref/a
+       rhoref = cref/Omegraf
+       cref = sqrt(Tref/mref)
+       Omegaref = electron charge * Bref / mref
+    
+    Inputs:
+      Tref          measured in keV (scalar)
+      Bref          measured in Tesla (scalar)
+      mref          measured in proton masses (scalar)
+      minorRadius   minor radius a, measured in m (scalar)
+    Outputs:
+      rhostar       (cref/Omegaref)/a, dimensionless (scalar)
+    """
+    rhostar = rho_ref(Tref, mref, Bref) / minorRadius
+    return rhostar

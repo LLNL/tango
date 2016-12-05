@@ -1,8 +1,14 @@
-"""See https://github.com/LLNL/tango for copyright and license information"""
+"""
+datasaver
+
+Module for saving data for Tango runs to disk.
+
+See https://github.com/LLNL/tango for copyright and license information
+"""
 
 from __future__ import division
 import numpy as np
-import logging
+from . import tango_logging
 
 class DataSaverHandler(object):
     """convenient interface to a dataSavers."""
@@ -132,20 +138,20 @@ class DataSaver(object):
             filenameTimestep = filename + "_timestep"
             self.oneOffData['iterationNumber'] = self.iterationNumber
             
-            logging.info("Saving timestep data to {}.npz".format(filenameTimestep))
+            tango_logging.log("Saving timestep data to {}.npz".format(filenameTimestep))  # info
             np.savez(filenameTimestep, **self.oneOffData)
-            logging.info("... Saved!")
+            tango_logging.log("... Saved!")  # info
             
             # save 1D data that changes each iteration
             if self.dataAllIterations != {}:
                 filenameIterations = filename + "_iterations"
-                logging.info("Saving iterations data to {}.npz".format(filenameIterations))
+                tango_logging.log("Saving iterations data to {}.npz".format(filenameIterations))  # info
                 np.savez(filenameIterations, **self.dataAllIterations)
-                logging.info("... Saved!")
+                tango_logging.log("... Saved!")  # info
             else:
-                logging.info("Not saving any iterations data for this timestep.")
+                tango_logging.log("Not saving any iterations data for this timestep.")  # info
         else:
-            print("Object is in finalized state.  Cannot save.")
+            tango_logging.log("Object is in finalized state.  Cannot save.")
         
     def reset_for_next_timestep(self):
         """Reset all of the data to zeros and the counter so that the object is fresh for the next

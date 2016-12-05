@@ -1,13 +1,17 @@
+"""
+gene_startup
+
+Handle the initialization of GENE for a Tango-GENE run.
+
+See https://github.com/LLNL/tango for copyright and license information
+"""
+
 from __future__ import division
 import numpy as np
 from . import gene_check
 from . import genecomm
 from . import parameters
 
-
-"""
-Handle the initialization of GENE for a Tango-GENE run.
-"""
     
 def setup_gene_run(psiTango, psiGene, minorRadius, majorRadius, B0, ionMass, ionCharge, densityTangoGrid, pressureTangoGrid, Bref, Lref, 
                    grids, fromCheckpoint=True):
@@ -38,14 +42,14 @@ def setup_gene_run(psiTango, psiGene, minorRadius, majorRadius, B0, ionMass, ion
     
     # if doing a clean run from no checkpoint, create the initial checkpoint...
     if fromCheckpoint==False:
-        geneFluxModelTemp = genecomm.geneComm(Bref=Bref, Lref=Lref, B0=B0, a=minorRadius, R0=majorRadius, safetyFactorGeneGrid=safetyFactorGeneGrid,
+        geneFluxModelTemp = genecomm.GeneComm(Bref=Bref, Lref=Lref, B0=B0, a=minorRadius, R0=majorRadius, safetyFactorGeneGrid=safetyFactorGeneGrid,
                                       psiTangoGrid=psiTango, psiGeneGrid=psiGene, densityTangoGrid=densityTangoGrid, ionMass=ionMass, ionCharge=ionCharge, grids=grids)
         simulationTimeInitialRun = 30
         pressureGeneGrid = grids.MapProfileOntoTurbGrid(pressureTangoGrid)
         initial_gene_run(geneFluxModelTemp, pressureGeneGrid, simulationTimeInitialRun)
     
     # create a GENE Fluxmodel    
-    geneFluxModel = genecomm.geneComm(Bref=Bref, Lref=Lref, B0=B0, a=minorRadius, R0=majorRadius, safetyFactorGeneGrid=safetyFactorGeneGrid,
+    geneFluxModel = genecomm.GeneComm(Bref=Bref, Lref=Lref, B0=B0, a=minorRadius, R0=majorRadius, safetyFactorGeneGrid=safetyFactorGeneGrid,
                                       psiTangoGrid=psiTango, psiGeneGrid=psiGene, densityTangoGrid=densityTangoGrid, ionMass=ionMass, ionCharge=ionCharge, grids=grids)
     
     # set the simulation time per GENE call

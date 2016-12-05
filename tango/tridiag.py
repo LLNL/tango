@@ -1,4 +1,9 @@
-"""See https://github.com/LLNL/tango for copyright and license information"""
+"""
+tridiag
+
+Solver for tridiagonal systems.
+
+See https://github.com/LLNL/tango for copyright and license information"""
 
 from __future__ import division
 import numpy as np

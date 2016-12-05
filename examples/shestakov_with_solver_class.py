@@ -16,6 +16,7 @@ import logging
 
 from tango.extras import shestakov_nonlinear_diffusion
 import tango as tng
+import tango.analysis
 
 def initialize_shestakov_problem():
     # Problem Setup
@@ -69,7 +70,7 @@ turbhandler = tng.TurbulenceHandler(dx, x, lmparams, FluxModel)
 t_array = np.array([0, 1e4])  # specify the timesteps to be used.
 
 compute_all_H = ComputeAllH(turbhandler)
-solver = tng.solver.solver(L, x, n, nL, t_array, maxIterations, tol, compute_all_H, turbhandler)
+solver = tng.solver.Solver(L, x, n, nL, t_array, maxIterations, tol, compute_all_H, turbhandler)
 
 # set up data logger
 arrays_to_save = ['H2', 'H3', 'profile']  # for list of possible arrays, see solver._pkgdata()
@@ -113,6 +114,6 @@ else:
 #plt.plot(x, n-nss)
 #plt.ylim(ymin=0)
 filename = data_basename + "1"
-Timestep = tng.analysis.TimestepData(filename)
+Timestep = tango.analysis.TimestepData(filename)
 lastiter = Timestep.get_last_iteration()
 lastiter.plot_profile_and_starting_profile(savename='solution.png')

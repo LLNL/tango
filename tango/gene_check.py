@@ -1,12 +1,5 @@
-from __future__ import division
-import numpy as np
-from . import genecomm_lowlevel
-import os
-import glob
-import time
-
 """
-GENE checks
+gene_check
 
 Purposes:
 1. Very quick run of GENE to make sure that it works
@@ -16,7 +9,16 @@ Purposes:
      that some actions, in particular writing to file, are handled by only a single process, GENE returns an
      integer that effectively functions as an MPI  rank.  The Python code can then ensure that only actions occur
      on the process with rank==0.
+
+See https://github.com/LLNL/tango for copyright and license information
 """
+
+from __future__ import division
+import numpy as np
+from . import genecomm_lowlevel
+import os
+import glob
+import time
 
 def gene_check():
     """Perform checking to make sure GENE works.
@@ -39,6 +41,7 @@ def gene_check():
     densityHat = np.exp(-kappa_n*aspr_in*(rho-rho0))
     safetyFactor = 0.85 + 2.2 * rho**2
     Lref = 1.65
+    rhoStar = 1/150
     Bref = 2.5
     
     # choose a suffix number unlikely to be used in pratice, then check that the checkpoint file does not exist already 
@@ -49,7 +52,7 @@ def gene_check():
     (MPIrank, dVdxHat, sqrt_gxx, avgParticleFluxHat, avgHeatFluxHat, temperatureOutput, densityOutput) = genecomm_lowlevel.call_gene_low_level(
                 simulationTime=simulationTime, rho=rho,
                 temperatureHat=temperatureHat, densityHat=densityHat, safetyFactor=safetyFactor,
-                Lref=Lref, Bref=Bref, checkpointSuffix=checkpointSuffix)
+                Lref=Lref, Bref=Bref, rhoStar=rhoStar, checkpointSuffix=checkpointSuffix)
     
     time.sleep(0.1) # pause to allow processes to catch up
     

@@ -1,6 +1,9 @@
-"""Parameters module
+"""
+parameters
 
 Unified place to set defaults and provide input parameters and profiles
+
+See https://github.com/LLNL/tango for copyright and license information
 """
 
 from __future__ import division, absolute_import

@@ -10,7 +10,7 @@ def test_handler_single_timestep():
     # test the use of solver class with data logger --- single timestep
     (L, N, dx, x, nL, n, MaxIterations, tol, turbhandler, compute_all_H, t_array) = problem_setup()
     (tangoCheckpointHandler, tangoHistoryHandler) = setup_handlers()
-    solver = tng.solver.solver(L, x, n, nL, t_array, MaxIterations, tol, compute_all_H, turbhandler)
+    solver = tng.solver.Solver(L, x, n, nL, t_array, MaxIterations, tol, compute_all_H, turbhandler)
     solver.fileHandlerExecutor.add_handler(tangoCheckpointHandler)
     solver.fileHandlerExecutor.add_handler(tangoHistoryHandler)
 
@@ -39,7 +39,7 @@ def test_handler_multiple_files():
     (L, N, dx, x, nL, n, MaxIterations, tol, turbhandler, compute_all_H, t_array) = problem_setup()
     (tangoCheckpointHandler, tangoHistoryHandler) = setup_handlers()
     t_array = np.array([0, 1.0, 1e4])
-    solver = tng.solver.solver(L, x, n, nL, t_array, MaxIterations, tol, compute_all_H, turbhandler)
+    solver = tng.solver.Solver(L, x, n, nL, t_array, MaxIterations, tol, compute_all_H, turbhandler)
     solver.fileHandlerExecutor.add_handler(tangoCheckpointHandler)
     solver.fileHandlerExecutor.add_handler(tangoHistoryHandler)
 

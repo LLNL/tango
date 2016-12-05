@@ -1,14 +1,8 @@
-"""See https://github.com/LLNL/tango for copyright and license information"""
-
-from __future__ import division
-import numpy as np
-from . import tridiag
-
 """
 HToMatrixFD
 
 Module for constructing and solving the linear matrix system corresponding to the iteration equation within
-  an implicit timestep advance of a transport equation.
+an implicit timestep advance of a transport equation.
   
 This module assumes we are solving a 1D PDE.  It is designed to be used in the solution of transport equations.
 For example, imagine we are solving an equation of the form [where d_t === partial_t]
@@ -48,7 +42,13 @@ finite difference scheme, the matrix system is tridiagonal, which can be solved 
  using a Chebyshev basis is probably going to be extremely accurate and fast.  E.g., dedalus could be used, or chebfun
  
 References: Corsica Users' Manual, p39, p65.
+
+See https://github.com/LLNL/tango for copyright and license information
 """
+
+from __future__ import division
+import numpy as np
+from . import tridiag
 
 def H_to_matrix(dt, dx, UL, U_mminus1, H1, H2=None, H3=None, H4=None, H6=None, H7=None):
     """

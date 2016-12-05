@@ -1,15 +1,15 @@
-"""See https://github.com/LLNL/tango for copyright and license information"""
+"""
+physics
+
+Module for dealing with other (non-turbulent) transport physics that contribute to the transport equation
+
+See https://github.com/LLNL/tango for copyright and license information
+"""
 
 from __future__ import division
 import numpy as np
 from . import parameters
 
-
-"""
-physics
-
-Module for dealing with other (non-turbulent) transport physics that contribute to the transport equation
-"""
 
 # physical constants with module-wide scope.  Given in SI units
 e = 1.60217662e-19          # electron charge

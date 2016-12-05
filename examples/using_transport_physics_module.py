@@ -105,7 +105,7 @@ HcontribTransportPhysics = tng.physics_to_H.Hcontrib_TransportPhysics(profilesAl
 
 t_array = np.array([0, 1e4])  # specify the timesteps to be used.
 compute_all_H = ComputeAllH(HcontribTransportPhysics)
-solver = tng.solver.solver(L, r, p, nL, t_array, MaxIterations, tol, compute_all_H, turbhandler)
+solver = tng.solver.Solver(L, r, p, nL, t_array, MaxIterations, tol, compute_all_H, turbhandler)
 
 # set up data logger
 #arrays_to_save = ['H2', 'H3', 'profile']  # for list of possible arrays, see solver._pkgdata()

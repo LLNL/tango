@@ -1,4 +1,12 @@
-"""See https://github.com/LLNL/tango for copyright and license information"""
+"""
+analysis
+
+Module for performing data analysis on saved files.
+
+See https://github.com/LLNL/tango for copyright and license information
+"""
+
+
 
 from __future__ import division
 import numpy as np
@@ -7,11 +15,7 @@ matplotlib.use('qt5agg')  # workaround for a bug in recent Anaconda build of mat
 import matplotlib.pyplot as plt
 from . import physics_to_H
 
-"""
-analysis
 
-Module for performing data analysis on saved files
-"""
 
         
 class TimestepData(object):

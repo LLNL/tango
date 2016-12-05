@@ -1,21 +1,25 @@
-"""See https://github.com/LLNL/tango for copyright and license information"""
+"""
+genecomm
+
+High-level communcation between GENE and the rest of Tango.
+
+Responsibilities:
+1. Unit conversion   Tango speaks in SI, GENE speaks in normalized units.  This module converts between the two.
+2. Encapsulation     Internally maintain everything that stays fixed; provide an interface that can be called by Tango
+                       with only the quantity that changes (pressure profile)
+3. Provide interface to change certain quantities, e.g., time step simulation time
+
+See https://github.com/LLNL/tango for copyright and license information
+"""
 
 from __future__ import division
 import numpy as np
 from . import genecomm_lowlevel
 from . import genecomm_unitconversion
 
-"""
-High Level Communcation between GENE and the rest of Tango 
 
-Responsibilities
-1. Unit conversion:  Tango speaks in SI, GENE speaks in normalized units.  This module converts between the two.
-2. Encapsulation:    Internally maintain everything that stays fixed; provide an interface that can be called by Tango
-                       with only the quantity that changes (pressure profile)
-3. Provide interface to change certain quantities: e.g., time step simulation time
-"""
 
-class geneComm(object):
+class GeneComm(object):
     """Class-based interface for Tango to call GENE.
     
     Tango requires an object with a get_flux() method, which this class provides.  Except where specifically noted otherwise,
@@ -26,10 +30,10 @@ class geneComm(object):
         """Constructor.
             
         Inputs:
-          Bref                      reference magnetic field, measured in Tesla (scalar)
-          Lref                      reference length, measured in meters (scalar)
-          Tref                      reference temperature, measured in keV (scalar)
-          nref                      reference density, measured in 10^19 m^-3 (scalar)
+          Bref                      GENE reference magnetic field, measured in Tesla (scalar)
+          Lref                      GENE reference length, measured in meters (scalar)
+          Tref                      GENE reference temperature, measured in keV (scalar)
+          nref                      GENE reference density, measured in 10^19 m^-3 (scalar)
           B0                        parameter specifying the analytic magnetic field for circular geometry.  Measured in Tesla.  
                                       Typically equal to Bref (scalar)
           a                         minor radius, measured in meters (scalar)
@@ -43,10 +47,10 @@ class geneComm(object):
           grids                     object for transforming the profiles and transport coefficients between the Tango grid and
                                       the GENE grid.  See interfacegrids_gene.py (object)
         """
-        self.Bref = Bref    # reference magnetic field
-        self.Lref = Lref    # reference length
-        self.Tref = Tref    # measured in keV
-        self.nref = nref    # measured in 10^19 m^-3
+        self.Bref = Bref
+        self.Lref = Lref
+        self.Tref = Tref
+        self.nref = nref
         self.mref = 1       # measured in proton masses
         self.B0 = B0
         self.a = a
@@ -127,9 +131,10 @@ class geneComm(object):
         densityHatTangoGrid = genecomm_unitconversion.density_SI_to_gene(self.densityTangoGrid)
         densityHatGeneGrid = self.gridMapper.MapProfileOntoTurbGrid(densityHatTangoGrid)
                 
+        rhoStar = genecomm_unitconversion.calculate_consistent_rhostar(self.Tref, self.Bref, self.mref, self.minorRadius)
         geneInterface = genecomm_lowlevel.GeneInterface(rho=rhoGeneInterface, densityHat=densityHatGeneGrid,
                                                         safetyFactor=self.safetyFactorGeneGrid, ionMass=self.ionMass, ionCharge=self.ionCharge,
-                                                        Lref=self.Lref, Bref=self.Bref)
+                                                        Lref=self.Lref, Bref=self.Bref, rhoStar=rhoStar)
         return geneInterface
         
 

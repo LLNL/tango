@@ -1,11 +1,5 @@
-"""See https://github.com/LLNL/tango for copyright and license information"""
-
-from __future__ import division
-import numpy as np
-from . import physics
-from . import derivatives
 """
-PhysicsToH
+physics_to_H
 
 Module for converting between physics-based transport coefficients and the H coefficients specifying the 
 transport equation.  This conversion typically involves magnetic geometry coefficients.
@@ -22,8 +16,13 @@ After multiplying through by V', it becomes
 The transport equation is specified in the form  [where d_t = partial time derivative, d_x = partial space derivative] 
        (3)  H_1 d_t U - d_x( H_2 d_x U + H_3 U + H_4) - H_6 U - H_7 = 0     [note, H_5 is not implemented in this package]
        
-
+See https://github.com/LLNL/tango for copyright and license information
 """
+
+from __future__ import division
+import numpy as np
+from . import physics
+from . import derivatives
 
 class Hcontrib_TransportPhysics(object):
     """Provide an interface to computing the contributions to the H coefficients from

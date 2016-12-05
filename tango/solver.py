@@ -1,17 +1,31 @@
-"""See https://github.com/LLNL/tango for copyright and license information"""
+"""
+solver
+
+Module that handles the meat of solving a timestep in a Tango transport equation, including the inner
+loop of iterating to solve a nonlinear equation.
+
+Convergence of the iteration loop is determined through comparing the rms residual of the nonlinear transport
+equation to a relative tolerance value tol.
+
+Failure modes:
+    --convergence tolerance not reached within the maximum number of iterations (maxIterations)
+    --solution becomes unphysical (negative, infinite, or NaN vlaues)
+
+If one of the failure modes is detected, the solver attempts to fail gracefully by setting solver.ok = False with
+control passing back to the user.  Additionally, if the solution is unphysical, solver.solutionError = True is set.
+
+See https://github.com/LLNL/tango for copyright and license information"""
 
 from __future__ import division, absolute_import
 import numpy as np
-import logging
+from . import tango_logging
 from . import HToMatrixFD
 from . import datasaver
 from . import handlers
 
-"""
-solver
-"""
 
-class solver(object):
+
+class Solver(object):
     def __init__(self, L, x, profileIC, profileRightBC, tArray, maxIterations, tol, compute_all_H, turbhandler):
         self.L = L        # size of domain
         self.x = x        # grid (array)
@@ -51,7 +65,7 @@ class solver(object):
         
         self.l = 0   # reset iteration counter
         self.errHistory[:] = 0
-        logging.info("Timestep m={}:  Beginning iteration loop ...".format(self.m))
+        tango_logging.log("Timestep m={}:  Beginning iteration loop ...".format(self.m))   # info
         
         # compute next iteration
         
@@ -59,9 +73,9 @@ class solver(object):
             self.compute_next_iteration()
 
         if self.converged:            
-            logging.info("Timestep m={}:  Converged!  Successfully found the solution for t={}.  Rms error={}.  Took {} iterations.".format(self.m, self.t, self.errHistory[self.l-1], self.l))
+            tango_logging.log("Timestep m={}:  Converged!  Successfully found the solution for t={}.  Rms error={}.  Took {} iterations.".format(self.m, self.t, self.errHistory[self.l-1], self.l))  # info
             if self.m >= len(self.tArray) - 1:
-                logging.info("Reached the final timestep m={} at t={}.  Simulation ending...".format(self.m, self.t))
+                tango_logging.log("Reached the final timestep m={} at t={}.  Simulation ending...".format(self.m, self.t))  # info
                 self.reachedEnd = True
         
         
@@ -92,8 +106,8 @@ class solver(object):
         # compute new iterate of profile
         self.profile = HToMatrixFD.solve(A, B, C, f)
         
-        logging.debug("Timestep m={}: after iteration number l={}, first 4 entries of profile={};  last 4 entries={}".format(
-            self.m, self.l, self.profile[:4], self.profile[-4:]))
+        tango_logging.log("Timestep m={}: after iteration number l={}, first 4 entries of profile={};  last 4 entries={}".format(
+            self.m, self.l, self.profile[:4], self.profile[-4:]))  # debug
         
         # save data if desired
         datadict = self._pkgdata(H1=H1, H2=H2, H3=H3, H4=H4, H6=H6, H7=H7, A=A, B=B, C=C, f=f, profile=self.profile, rmsError=rmsError, extradata=extraturbdata)
@@ -107,7 +121,7 @@ class solver(object):
         # about to loop to next iteration l
         self.l += 1
         if self.l >= self.maxIterations:
-            logging.warning("Timestep m={} and time t={}:  maxIterations ({}) reached.  Error={} while tol={}".format(self.m, self.t, self.maxIterations, rmsError, self.tol))
+            tango_logging.log("Timestep m={} and time t={}:  maxIterations ({}) reached.  Error={} while tol={}".format(self.m, self.t, self.maxIterations, rmsError, self.tol))  # warning
     
     @property
     def ok(self):
@@ -127,10 +141,10 @@ class solver(object):
         """Check the profile for validity: check for NaNs, infinities, negative numbers
         """
         if np.all(np.isfinite(profile)) == False:
-            logging.error("NaN or Inf detected in profile at l={}.  Aborting...".format(self.l))
+            tango_logging.log("NaN or Inf detected in profile at l={}.  Aborting...".format(self.l))  # error
             self.solutionError = True
         if np.any(profile < 0) == True:
-            logging.error("Negative value detected in profile at l={}.  Aborting...".format(self.l))
+            tango_logging.log("Negative value detected in profile at l={}.  Aborting...".format(self.l))  # error
             self.solutionError = True
 
     def check_convergence(self, A, B, C, f, profile, tol):

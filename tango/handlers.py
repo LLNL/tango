@@ -1,4 +1,10 @@
-"""See https://github.com/LLNL/tango for copyright and license information"""
+"""
+handlers
+
+Flexible approach to dealing with data and files on disk during a Tango run.
+
+See https://github.com/LLNL/tango for copyright and license information
+"""
 
 from __future__ import division
 import numpy as np

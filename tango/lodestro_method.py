@@ -1,9 +1,3 @@
-"""See https://github.com/LLNL/tango for copyright and license information"""
-
-from __future__ import division
-import numpy as np
-from . import derivatives
-
 """
 lodestro_method
 
@@ -22,7 +16,13 @@ Iterate averaging is achieved through an exponentially weighted moving average (
 
   Both the turbulent fluxes and profiles will be relaxed in this form.  Different relaxation
   parameters A_turbflux and A_profile are allowed.
+  
+See https://github.com/LLNL/tango for copyright and license information
 """
+
+from __future__ import division
+import numpy as np
+from . import derivatives
 
 class TurbulenceHandler(object):
     """This class acts as an interface to underlying packages for the Lodestro Method, a model 
