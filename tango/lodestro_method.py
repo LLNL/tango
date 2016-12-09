@@ -35,7 +35,7 @@ class TurbulenceHandler(object):
     Since the class provides the H coefficients, and not simply diffusion coefficients, it must
     be aware of the coordinate geometric factor V' = dV/dpsi.
     """
-    def __init__(self, dx, x, lmParams, fluxModel, grids=None, Vprime=None):
+    def __init__(self, dx, x, lmParams, fluxModel, gridMapper=None, Vprime=None):
         """A geometric factor Vprime may be optionally provided to the constructor.  This 
             geometric factor is essentially a Jacoabian and appears in transport equations
             in non-Cartesian geometry.  It typically appears in the form
@@ -55,7 +55,7 @@ class TurbulenceHandler(object):
               fluxModel   object with a get_flux() method that provides turbulent flux
                              get_flux() accepts the profile on the turbulence grid and returns
                              the turbulent flux on the turbulence grid
-              grids       (optional) object for transforming the profiles and transport coefficients
+              gridMapper  (optional) object for transforming the profiles and transport coefficients
                             between the transport grid and the grid used to compute turbulent fluxes
                             See interfacegrids_gene.py
                                 default: None [same grid for transport and turbulence]
@@ -69,12 +69,12 @@ class TurbulenceHandler(object):
         self.fluxModel = fluxModel
         assert hasattr(fluxModel, 'get_flux') and callable(getattr(fluxModel, 'get_flux'))
         
-        if grids is not None:
-            assert hasattr(grids, 'map_profile_onto_turb_grid') and callable(getattr(grids, 'map_profile_onto_turb_grid'))
-            assert hasattr(grids, 'map_transport_coeffs_onto_transport_grid') and callable(getattr(grids, 'map_transport_coeffs_onto_transport_grid'))
-            self.grids = grids
+        if gridMapper is not None:
+            assert hasattr(gridMapper, 'map_profile_onto_turb_grid') and callable(getattr(gridMapper, 'map_profile_onto_turb_grid'))
+            assert hasattr(gridMapper, 'map_transport_coeffs_onto_transport_grid') and callable(getattr(gridMapper, 'map_transport_coeffs_onto_transport_grid'))
+            self.gridMapper = gridMapper
         else:
-            self.grids = grids_DoNothing(x)
+            self.gridMapper = GridsNull(x)
         
         if Vprime is not None:
             self.Vprime = Vprime
@@ -98,18 +98,18 @@ class TurbulenceHandler(object):
           H3contrib         array
           data              other data
         """
-        profileTurbGrid = self.grids.map_profile_onto_turb_grid(profile)
+        profileTurbGrid = self.gridMapper.map_profile_onto_turb_grid(profile)
         profileEWMATurbGrid = self.lodestroMethod.ewma_profile(profileTurbGrid) # could also reverse the order of this and the previous step...
         
         fluxTurbGrid = self.fluxModel.get_flux(profileEWMATurbGrid)
         fluxEWMATurbGrid = self.lodestroMethod.ewma_turb_flux(fluxTurbGrid)
         (DTurbGrid, cTurbGrid, DcDataTurbGrid) = self.lodestroMethod.flux_to_transport_coeffs(fluxEWMATurbGrid, profileEWMATurbGrid, self.dx)
-        (D, c) = self.grids.map_transport_coeffs_onto_transport_grid(DTurbGrid, cTurbGrid)
+        (D, c) = self.gridMapper.map_transport_coeffs_onto_transport_grid(DTurbGrid, cTurbGrid)
         (H2contrib, H3contrib) = self.Dc_to_Hcontrib(D, c)
         
         # Other data that may be useful for debugging or data analysis purposes
-        x = self.grids.get_x_transport_grid()        
-        xTurbGrid = self.grids.get_x_turbulence_grid()
+        x = self.gridMapper.get_x_transport_grid()        
+        xTurbGrid = self.gridMapper.get_x_turbulence_grid()
         data = {'x': x, 'xTurbGrid': xTurbGrid,
                 'D': D, 'c': c,
                 'profileTurbGrid': profileTurbGrid, 'profileEWMATurbGrid': profileEWMATurbGrid,
@@ -408,8 +408,8 @@ class EWMA(object):
     def set_ewma_iterate(self, yEWMA):
         self._yEWMA_lminus1 = yEWMA
         
-class grids_DoNothing(object):
-    """Placeholder class for moving between grids when the turbulence grid will be the same as the transport grid.
+class GridsNull(object):
+    """Null class for moving between grids when the turbulence grid will be the same as the transport grid.
     No interpolation of quantities between grids will be performed, as there is only one grid.
     """
     def __init__(self, x):

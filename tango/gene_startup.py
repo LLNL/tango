@@ -14,7 +14,7 @@ from . import parameters
 
     
 def setup_gene_run(psiTango, psiGene, minorRadius, majorRadius, B0, ionMass, ionCharge, densityTangoGrid, pressureTangoGrid, Bref, Lref, 
-                   grids, fromCheckpoint=True):
+                   gridMapper, fromCheckpoint=True, pseudoGene=False):
     """Do all the necessary setup for a tango run using GENE
     
     This function works with either a clean run from no checkpoint, or starting from an initial condition.
@@ -31,26 +31,32 @@ def setup_gene_run(psiTango, psiGene, minorRadius, majorRadius, B0, ionMass, ion
       pressureTangoGrid     ion pressure profile (initial condition) on Tango radial grid in J/m^3 (array)
       Bref                  GENE reference magnetic field in Tesla (scalar)
       Lref                  GENE reference length in m (scalar)
-      grids                 object for interfacing between Tango and GENE grids [see interfacegrids_gene.py]
+      gridMapper            object for interfacing between Tango and GENE grids [see interfacegrids_gene.py]
       fromCheckpoint        True if restarting GENE from a checkpoint (Boolean)
+      pseudoGene            False for normal GENE run, True for a pseudo call that does not run GENE but is used to test code (Boolean)
     """
     # check that GENE works and get MPI rank
-    (status, MPIrank) = gene_check.gene_check()
+    if pseudoGene==False:
+        (status, MPIrank) = gene_check.gene_check()
+    else:
+        (status, MPIrank) = (0, 0)
     
     # compute safety Factor on GENE grid
     safetyFactorGeneGrid = parameters.analytic_safety_factor(psiGene, minorRadius, majorRadius)
     
     # if doing a clean run from no checkpoint, create the initial checkpoint...
-    if fromCheckpoint==False:
-        geneFluxModelTemp = genecomm.GeneComm(Bref=Bref, Lref=Lref, B0=B0, a=minorRadius, R0=majorRadius, safetyFactorGeneGrid=safetyFactorGeneGrid,
-                                      psiTangoGrid=psiTango, psiGeneGrid=psiGene, densityTangoGrid=densityTangoGrid, ionMass=ionMass, ionCharge=ionCharge, grids=grids)
-        simulationTimeInitialRun = 30
-        pressureGeneGrid = grids.MapProfileOntoTurbGrid(pressureTangoGrid)
-        initial_gene_run(geneFluxModelTemp, pressureGeneGrid, simulationTimeInitialRun)
+    if pseudoGene==False:
+        if fromCheckpoint==False:
+            geneFluxModelTemp = genecomm.GeneComm(Bref=Bref, Lref=Lref, B0=B0, minorRadius=minorRadius, majorRadius=majorRadius, safetyFactorGeneGrid=safetyFactorGeneGrid,
+                                          psiTangoGrid=psiTango, psiGeneGrid=psiGene, densityTangoGrid=densityTangoGrid, ionMass=ionMass, ionCharge=ionCharge, gridMapper=gridMapper)
+            simulationTimeInitialRun = 30
+            pressureGeneGrid = gridMapper.MapProfileOntoTurbGrid(pressureTangoGrid)
+            initial_gene_run(geneFluxModelTemp, pressureGeneGrid, simulationTimeInitialRun)
     
     # create a GENE Fluxmodel    
-    geneFluxModel = genecomm.GeneComm(Bref=Bref, Lref=Lref, B0=B0, a=minorRadius, R0=majorRadius, safetyFactorGeneGrid=safetyFactorGeneGrid,
-                                      psiTangoGrid=psiTango, psiGeneGrid=psiGene, densityTangoGrid=densityTangoGrid, ionMass=ionMass, ionCharge=ionCharge, grids=grids)
+    geneFluxModel = genecomm.GeneComm(Bref=Bref, Lref=Lref, B0=B0, minorRadius=minorRadius, majorRadius=majorRadius, safetyFactorGeneGrid=safetyFactorGeneGrid,
+                                      psiTangoGrid=psiTango, psiGeneGrid=psiGene, densityTangoGrid=densityTangoGrid, ionMass=ionMass, ionCharge=ionCharge, gridMapper=gridMapper,
+                                      pseudoGene=pseudoGene)
     
     # set the simulation time per GENE call
     simulationTime = 10 # measured in Lref/cref
@@ -58,21 +64,6 @@ def setup_gene_run(psiTango, psiGene, minorRadius, majorRadius, B0, ionMass, ion
     return (geneFluxModel, MPIrank)
     
 
-def pseudo_setup_gene_run(psiTango, psiGene, minorRadius, majorRadius, B0, ionMass, ionCharge, densityProfile, pressureProfile, Bref, Lref, 
-                   grids, fromCheckpoint=True):
-    """Pseudo version of setup_gene_run to return values for testing purposes without actually running GENE
-    """
-    MPIrank = 0
-    
-    class GeneFluxModel(object):
-        def get_flux(self):  # turbhandler requires that a FluxModel has a get_flux() method
-            pass
-        def set_simulation_time(self, simulationTime):  # this method  is also required
-            pass
-    
-    geneFluxModel = GeneFluxModel()
-    return (geneFluxModel, MPIrank)
-    
 def initial_gene_run(geneFluxModel, pressureGeneGrid, simulationTime):
     """Perform the initial GENE run.  
     

@@ -93,7 +93,9 @@ def problem_setup():
     #(geneFluxModel, MPIrank) = tango.gene_startup.setup_gene_run(psiTango, psiGene, minorRadius, majorRadius, B0, ionMass, ionCharge, densityProfile, pressureIC, Bref, Lref, grids, fromCheckpoint)
     
          # use this version to test, if in an environment without GENE
-    (geneFluxModel, MPIrank) = tango.gene_startup.pseudo_setup_gene_run(psiTango, psiGene, minorRadius, majorRadius, B0, ionMass, ionCharge, densityProfile, pressureIC, Bref, Lref, grids, fromCheckpoint)
+    pseudoGene = True
+    (geneFluxModel, MPIrank) = tango.gene_startup.setup_gene_run(psiTango, psiGene, minorRadius, majorRadius, B0, ionMass, ionCharge, densityProfile, pressureIC, Bref, Lref, grids, fromCheckpoint, pseudoGene)
+    # (geneFluxModel, MPIrank) = tango.gene_startup.pseudo_setup_gene_run(psiTango, psiGene, minorRadius, majorRadius, B0, ionMass, ionCharge, densityProfile, pressureIC, Bref, Lref, grids, fromCheckpoint)
     
     
     # other transport physics / physicsToH object creation
@@ -171,7 +173,7 @@ solver.dataSaverHandler.set_parallel_environment(parallelEnvironment, MPIrank)
     # Implicit time advance: iterate to solve the nonlinear equation!
     # solver.TakeTimestep()
     
-print("Using pseudo_setup_gene_run, everything initialized OK!")
+print("Using pseudo-GENE, python-GENE interface code initialized OK!")
 
 
 

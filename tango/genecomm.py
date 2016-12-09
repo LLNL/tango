@@ -25,8 +25,9 @@ class GeneComm(object):
     Tango requires an object with a get_flux() method, which this class provides.  Except where specifically noted otherwise,
     all quantities are stored in SI units.
     """
-    def __init__(self, Bref=None, Lref=None, Tref=1, nref=1, B0=None, a=None, R0=None, safetyFactorGeneGrid=None,
-                 psiTangoGrid=None, psiGeneGrid=None, densityTangoGrid=None, ionMass=1, ionCharge=1, grids=None):
+    def __init__(self, Bref=None, Lref=None, Tref=1, nref=1, B0=None, minorRadius=None, majorRadius=None, safetyFactorGeneGrid=None,
+                 psiTangoGrid=None, psiGeneGrid=None, densityTangoGrid=None, ionMass=1, ionCharge=1, gridMapper=None,
+                 pseudoGene=False):
         """Constructor.
             
         Inputs:
@@ -36,16 +37,17 @@ class GeneComm(object):
           nref                      GENE reference density, measured in 10^19 m^-3 (scalar)
           B0                        parameter specifying the analytic magnetic field for circular geometry.  Measured in Tesla.  
                                       Typically equal to Bref (scalar)
-          a                         minor radius, measured in meters (scalar)
-          R0                        major radius on axis, measured in meters (scalar)
+          minorRadius               minor radius a, measured in meters (scalar)
+          majorRadius               major radius R0 on axis, measured in meters (scalar)
           safetyFactorGeneGrid      safety factor evaluated on the GENE grid psiGeneGrid (array)
           psiTangoGrid              radial grid used by Tango (array)
           psiGeneGrid               radial grid used by GENE, with coordinate psi=r (array)
           densityTangoGrid          density profile, measured in m^-3, on the Tango grid (array)
           ionMass                   mass of ion species, measured in proton masses (scalar)
           ionCharge                 charge of ion species, measured in electron charge (scalar)
-          grids                     object for transforming the profiles and transport coefficients between the Tango grid and
+          gridMapper                object for transforming the profiles and transport coefficients between the Tango grid and
                                       the GENE grid.  See interfacegrids_gene.py (object)
+          pseudoGene                False for normal GENE run, True for a pseudo call that does not run GENE but is used to test code (Boolean)
         """
         self.Bref = Bref
         self.Lref = Lref
@@ -53,8 +55,8 @@ class GeneComm(object):
         self.nref = nref
         self.mref = 1       # measured in proton masses
         self.B0 = B0
-        self.a = a
-        self.R0 = R0
+        self.minorRadius = minorRadius
+        self.majorRadius = majorRadius
         self.safetyFactorGeneGrid = safetyFactorGeneGrid
         self.psiTangoGrid = psiTangoGrid  # psi = r
         self.psiGeneGrid = psiGeneGrid # psi = x = r
@@ -63,11 +65,12 @@ class GeneComm(object):
         self.ionCharge = ionCharge # measured in electron charge
         self.simulationTime = None  # measured in Lref/cref
         
-        assert hasattr(grids, 'MapProfileOntoTurbGrid') and callable(getattr(grids, 'MapProfileOntoTurbGrid'))
-        assert hasattr(grids, 'MapTransportCoeffsOntoTransportGrid') and callable(getattr(grids, 'MapTransportCoeffsOntoTransportGrid'))
-        self.grids = grids
+        assert hasattr(gridMapper, 'map_profile_onto_turb_grid') and callable(getattr(gridMapper, 'map_profile_onto_turb_grid'))
+        assert hasattr(gridMapper, 'map_transport_coeffs_onto_transport_grid') and callable(getattr(gridMapper, 'map_transport_coeffs_onto_transport_grid'))
+        self.gridMapper = gridMapper
+        self.pseudoGene = pseudoGene
         
-        self.densityGeneGrid = self.grids.MapProfileOntoTurbGrid(densityTangoGrid)
+        self.densityGeneGrid = self.gridMapper.map_profile_onto_turb_grid(densityTangoGrid)
         
         self.geneInterface = self._create_gene_interface()
     
@@ -127,14 +130,15 @@ class GeneComm(object):
           geneInterface     Instance of genecomm_lowlevel.GeneInterface, enables running GENE
         """
         # convert SI quantities to what GENE expects
-        rhoGeneInterface = genecomm_unitconversion.radius_SI_to_libgenetango_input(self.psiGeneGrid, self.a)  # convert to rho = r/a
+        rhoGeneInterface = genecomm_unitconversion.radius_SI_to_libgenetango_input(self.psiGeneGrid, self.minorRadius)  # convert to rho = r/a
         densityHatTangoGrid = genecomm_unitconversion.density_SI_to_gene(self.densityTangoGrid)
-        densityHatGeneGrid = self.gridMapper.MapProfileOntoTurbGrid(densityHatTangoGrid)
+        densityHatGeneGrid = self.gridMapper.map_profile_onto_turb_grid(densityHatTangoGrid)
                 
         rhoStar = genecomm_unitconversion.calculate_consistent_rhostar(self.Tref, self.Bref, self.mref, self.minorRadius)
         geneInterface = genecomm_lowlevel.GeneInterface(rho=rhoGeneInterface, densityHat=densityHatGeneGrid,
                                                         safetyFactor=self.safetyFactorGeneGrid, ionMass=self.ionMass, ionCharge=self.ionCharge,
-                                                        Lref=self.Lref, Bref=self.Bref, rhoStar=rhoStar)
+                                                        Lref=self.Lref, Bref=self.Bref, rhoStar=rhoStar,
+                                                        pseudoGene=self.pseudoGene)
         return geneInterface
         
 

@@ -24,14 +24,20 @@ class GeneInterface(object):
     GENE's radial grid.  Unit conversion into/out of GENE's units and conversion to/from GENE's radial grid are performed elsewhere.
     """
     def __init__(self, rho=None, densityHat=None, safetyFactor=None,
-                 ionMass=1, ionCharge=1, Lref=None, Bref=None, rhoStar=None):
+                 ionMass=1, ionCharge=1, Lref=None, Bref=None, rhoStar=None, checkpointSuffix=0,
+                 pseudoGene=False):
         """
         Set up and store the things that do not change (everything except the pressure/temperature profile).  See
         call_gene_low_level for a description of the inputs.
+        
+        Inputs:
+          (...)                 see call_gene_low_level
+          pseudoGene            False for normal GENE run, True for a pseudo call that does not run GENE but is used only to test code (Boolean)
         """
         self.fixedParams = {'rho':rho,  'densityHat':densityHat,  'safetyFactor':safetyFactor,
                             'ionMass':ionMass,  'ionCharge':ionCharge,  'Lref':Lref,  'Bref':Bref,
-                            'rhoStar':rhoStar}
+                            'rhoStar':rhoStar, 'checkpointSuffix':checkpointSuffix}
+        self.pseudoGene = pseudoGene
 
     def call_gene(self, simulationTime, temperatureHat):
         """Run gene.
@@ -48,10 +54,10 @@ class GeneInterface(object):
           densityOutput         ? not sure
         """
     
-        assert simulationTime > 0, "Must set simulationTime to a valid value before running GENE!"
-        (MPIrank, dVdxHat, sqrt_gxx, avgParticleFluxHat, avgHeatFluxHat, temperatureOutput, densityOutput) = call_gene_low_level(simulationTime=simulationTime,
-                                                                                                                        temperatureHat=temperatureHat,
-                                                                                                                        **self.fixedParams)
+        if self.pseudoGene==False:
+            (MPIrank, dVdxHat, sqrt_gxx, avgParticleFluxHat, avgHeatFluxHat, temperatureOutput, densityOutput) = call_gene_low_level(simulationTime=simulationTime, temperatureHat=temperatureHat, **self.fixedParams)
+        else:
+            (MPIrank, dVdxHat, sqrt_gxx, avgParticleFluxHat, avgHeatFluxHat, temperatureOutput, densityOutput) = pseudo_call_gene_low_level(simulationTime=simulationTime, temperatureHat=temperatureHat, **self.fixedParams)
         return (dVdxHat, sqrt_gxx, avgParticleFluxHat, avgHeatFluxHat, temperatureOutput, densityOutput)
                                                                                                                         
 
@@ -162,3 +168,20 @@ def calculate_magnetic_shear(safetyFactor, psi):
     dq_dpsi = dq_dpsi_spline(psi)
     magneticShear = dq_dpsi * psi/safetyFactor
     return magneticShear
+
+    
+def pseudo_call_gene_low_level(simulationTime=None, rho=None, temperatureHat=None, densityHat=None, safetyFactor=None, 
+                        ionMass=1, ionCharge=1, Lref=None, Bref=None, rhoStar=None, checkpointSuffix=0):
+    """Function  to emulate a call to GENE with the same input arguments and return values.
+    
+    Used for testing other code when the overhead of an actual startup of GENE is not needed.  Of course, this can only
+    be used to test correctness of syntax, not correctness of values.
+    """
+    MPIrank = 1
+    dVdxHat = np.ones_like(rho)
+    sqrt_gxx = np.ones_like(rho)
+    avgParticleFluxHat = np.ones_like(rho)
+    avgHeatFluxHat = np.ones_like(rho)
+    temperatureOutput = np.ones_like(rho)
+    densityOutput = np.ones_like(rho)
+    return (MPIrank, dVdxHat, sqrt_gxx, avgParticleFluxHat, avgHeatFluxHat, temperatureOutput, densityOutput)

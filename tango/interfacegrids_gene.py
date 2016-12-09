@@ -17,6 +17,21 @@ import numpy as np
 import scipy.interpolate
 import scipy
 
+class GridsNull(object):
+    """Null class for moving between grids when the turbulence grid will be the same as the transport grid.
+    No interpolation of quantities between grids will be performed, as there is only one grid.
+    """
+    def __init__(self, x):
+        self.x = x
+    def map_profile_onto_turb_grid(self, profile):
+        return profile
+    def map_transport_coeffs_onto_transport_grid(self, D, c):
+        return (D, c)
+    def get_x_transport_grid(self):
+        return self.x
+    def get_x_turbulence_grid(self):
+        return self.x
+
 class GridInterfaceTangoOutside(object):
     """Class for interacing Tango's grid and GENE's grid where at the outer boundary, Tango's grid
       extends radially outward farther than GENE's.  At the inner bounadry, Tango's grid extends

@@ -30,7 +30,7 @@ def gene_check():
     
     N = 64
     rho = np.linspace(0.1, 0.9, N)
-    simulationTime = 0.5
+    simulationTime = 0.3
 
     # set a few profiles    
     rho0 = 0.5
