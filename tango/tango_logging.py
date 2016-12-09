@@ -17,6 +17,7 @@ See https://github.com/LLNL/tango for copyright and license information
 """
 
 from __future__ import division
+import datetime
 
 parallelEnvironment = None
 MPIrank = None
@@ -43,10 +44,11 @@ def log(message, level=None):
         _log(message, level)
     
 def _log(message, level=None):
-    """Log the message.
+    """Log the message, adding a timestamp.
     
     Adding optional targets would go here.
     """
+    message = add_time_stamp(message)
     _log_to_stdout(message)
 
 def _log_to_stdout(message):
@@ -61,3 +63,17 @@ def serial_or_rank0():
         if MPIrank == 0:
             return True
     return False
+    
+def time_stamp():
+    """Produce a time stamp appropriate for logging messages.
+    
+    Timestamp uses UTC, which is Pacific Time + 8 hours.  The timestamp has the time only and does not include the date.
+    """
+    # timestampStr = datetime.datetime.utcnow().strftime("%H:%M:%S") # equivalent to line below
+    timestampStr = '{:%H:%M:%S}'.format(datetime.datetime.utcnow())
+    return timestampStr
+    
+def add_time_stamp(message):
+    """Add a time stamp in parentheses to the end of a message."""
+    timeStamp = '  ({})'.format(time_stamp())
+    return message + timeStamp
