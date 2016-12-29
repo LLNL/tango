@@ -25,7 +25,7 @@ class GeneComm(object):
     Tango requires an object with a get_flux() method, which this class provides.  Except where specifically noted otherwise,
     all quantities are stored in SI units.
     """
-    def __init__(self, Bref=None, Lref=None, Tref=1, nref=1, B0=None, minorRadius=None, majorRadius=None, safetyFactorGeneGrid=None,
+    def __init__(self, Bref=None, Lref=None, Tref=None, nref=None, B0=None, minorRadius=None, majorRadius=None, safetyFactorGeneGrid=None,
                  psiTangoGrid=None, psiGeneGrid=None, densityTangoGrid=None, ionMass=1, ionCharge=1, gridMapper=None,
                  pseudoGene=False):
         """Constructor.
@@ -101,7 +101,7 @@ class GeneComm(object):
         temperatureGeneGrid = pressure_to_temperature(pressureGeneGrid, self.densityGeneGrid)
         
         # convert the temperature from SI to GENE's normalized units
-        temperatureHatGeneGrid = genecomm_unitconversion.temperature_SI_to_gene(temperatureGeneGrid, self.Tref)
+        temperatureHatGeneGrid = genecomm_unitconversion.temperature_SI_to_gene(temperatureGeneGrid)
         
         # run GENE and get heat flux on GENE's grid
         (dVdxHat, sqrt_gxx, avgParticleFluxHatGeneGrid, avgHeatFluxHatGeneGrid, temperatureOutput, densityOutput) = self.geneInterface.call_gene(self.simulationTime, temperatureHatGeneGrid)
@@ -137,7 +137,7 @@ class GeneComm(object):
         rhoStar = genecomm_unitconversion.calculate_consistent_rhostar(self.Tref, self.Bref, self.mref, self.minorRadius)
         geneInterface = genecomm_lowlevel.GeneInterface(rho=rhoGeneInterface, densityHat=densityHatGeneGrid,
                                                         safetyFactor=self.safetyFactorGeneGrid, ionMass=self.ionMass, ionCharge=self.ionCharge,
-                                                        Lref=self.Lref, Bref=self.Bref, rhoStar=rhoStar,
+                                                        Lref=self.Lref, Bref=self.Bref, rhoStar=rhoStar, Tref=self.Tref, nref=self.nref,
                                                         pseudoGene=self.pseudoGene)
         return geneInterface
         

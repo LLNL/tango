@@ -43,6 +43,8 @@ def gene_check():
     Lref = 1.65
     rhoStar = 1/150
     Bref = 2.5
+    Tref = 1
+    nref = 1
     
     # choose a suffix number unlikely to be used in pratice, then check that the checkpoint file does not exist already 
     checkpointSuffix = 999  # choose a checkpoint number unlikely to be used in practice
@@ -52,7 +54,7 @@ def gene_check():
     (MPIrank, dVdxHat, sqrt_gxx, avgParticleFluxHat, avgHeatFluxHat, temperatureOutput, densityOutput) = genecomm_lowlevel.call_gene_low_level(
                 simulationTime=simulationTime, rho=rho,
                 temperatureHat=temperatureHat, densityHat=densityHat, safetyFactor=safetyFactor,
-                Lref=Lref, Bref=Bref, rhoStar=rhoStar, checkpointSuffix=checkpointSuffix)
+                Lref=Lref, Bref=Bref, rhoStar=rhoStar, Tref=Tref, nref=nref, checkpointSuffix=checkpointSuffix)
     
     time.sleep(0.1) # pause to allow processes to catch up
     

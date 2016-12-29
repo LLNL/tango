@@ -13,7 +13,7 @@ from . import genecomm
 from . import parameters
 
     
-def setup_gene_run(psiTango, psiGene, minorRadius, majorRadius, B0, ionMass, ionCharge, densityTangoGrid, pressureTangoGrid, Bref, Lref, 
+def setup_gene_run(psiTango, psiGene, minorRadius, majorRadius, B0, ionMass, ionCharge, densityTangoGrid, pressureTangoGrid, Bref, Lref, Tref, nref,
                    gridMapper, fromCheckpoint=True, pseudoGene=False):
     """Do all the necessary setup for a tango run using GENE
     
@@ -31,9 +31,14 @@ def setup_gene_run(psiTango, psiGene, minorRadius, majorRadius, B0, ionMass, ion
       pressureTangoGrid     ion pressure profile (initial condition) on Tango radial grid in J/m^3 (array)
       Bref                  GENE reference magnetic field in Tesla (scalar)
       Lref                  GENE reference length in m (scalar)
+      Tref                  GENE reference temperature in kev (scalar)
+      nref                  GENE reference density in 10^19 m^-3 (scalar)
       gridMapper            object for interfacing between Tango and GENE grids [see interfacegrids_gene.py]
       fromCheckpoint        True if restarting GENE from a checkpoint (Boolean)
       pseudoGene            False for normal GENE run, True for a pseudo call that does not run GENE but is used to test code (Boolean)
+    Outputs:
+      geneFluxModel         interface to GENE, with a get_flux method (GeneComm object)
+      MPIrank               MPI rank obtained from GENE for distinguishing processors (integer)
     """
     # check that GENE works and get MPI rank
     if pseudoGene==False:
@@ -54,7 +59,7 @@ def setup_gene_run(psiTango, psiGene, minorRadius, majorRadius, B0, ionMass, ion
             initial_gene_run(geneFluxModelTemp, pressureGeneGrid, simulationTimeInitialRun)
     
     # create a GENE Fluxmodel    
-    geneFluxModel = genecomm.GeneComm(Bref=Bref, Lref=Lref, B0=B0, minorRadius=minorRadius, majorRadius=majorRadius, safetyFactorGeneGrid=safetyFactorGeneGrid,
+    geneFluxModel = genecomm.GeneComm(Bref=Bref, Lref=Lref, Tref=Tref, nref=nref, B0=B0, minorRadius=minorRadius, majorRadius=majorRadius, safetyFactorGeneGrid=safetyFactorGeneGrid,
                                       psiTangoGrid=psiTango, psiGeneGrid=psiGene, densityTangoGrid=densityTangoGrid, ionMass=ionMass, ionCharge=ionCharge, gridMapper=gridMapper,
                                       pseudoGene=pseudoGene)
     

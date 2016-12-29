@@ -71,11 +71,13 @@ def problem_setup():
 
     # Get most of the problem parameters
     (psiTango, psiGene, minorRadius, majorRadius, Vprime, gradPsiSq, B0, ionMass, ionCharge, densityProfile, Bref, Lref) = tango.parameters.get_default_parameters()
+    Tref = 0.4
+    nref = 1
     
     L = psiTango[-1] - psiTango[0]
     # create object for interfacing tango and GENE radial grids
        # must be consistent with whether Tango's or Gene's radial domain extends farther radially outward
-    grids = tango.interfacegrids_gene.GridInterfaceTangoOutside(psiTango, psiGene)
+    gridMapper = tango.interfacegrids_gene.GridInterfaceTangoOutside(psiTango, psiGene)
     
     
     # specify a boundary condition for pressure at the outward radial boundary
@@ -94,7 +96,7 @@ def problem_setup():
     
          # use this version to test, if in an environment without GENE
     pseudoGene = True
-    (geneFluxModel, MPIrank) = tango.gene_startup.setup_gene_run(psiTango, psiGene, minorRadius, majorRadius, B0, ionMass, ionCharge, densityProfile, pressureIC, Bref, Lref, grids, fromCheckpoint, pseudoGene)
+    (geneFluxModel, MPIrank) = tango.gene_startup.setup_gene_run(psiTango, psiGene, minorRadius, majorRadius, B0, ionMass, ionCharge, densityProfile, pressureIC, Bref, Lref, Tref, nref, gridMapper, fromCheckpoint, pseudoGene)
     # (geneFluxModel, MPIrank) = tango.gene_startup.pseudo_setup_gene_run(psiTango, psiGene, minorRadius, majorRadius, B0, ionMass, ionCharge, densityProfile, pressureIC, Bref, Lref, grids, fromCheckpoint)
     
     

@@ -24,7 +24,7 @@ class GeneInterface(object):
     GENE's radial grid.  Unit conversion into/out of GENE's units and conversion to/from GENE's radial grid are performed elsewhere.
     """
     def __init__(self, rho=None, densityHat=None, safetyFactor=None,
-                 ionMass=1, ionCharge=1, Lref=None, Bref=None, rhoStar=None, checkpointSuffix=0,
+                 ionMass=1, ionCharge=1, Lref=None, Bref=None, rhoStar=None, Tref=None, nref=None, checkpointSuffix=0,
                  pseudoGene=False):
         """
         Set up and store the things that do not change (everything except the pressure/temperature profile).  See
@@ -36,7 +36,7 @@ class GeneInterface(object):
         """
         self.fixedParams = {'rho':rho,  'densityHat':densityHat,  'safetyFactor':safetyFactor,
                             'ionMass':ionMass,  'ionCharge':ionCharge,  'Lref':Lref,  'Bref':Bref,
-                            'rhoStar':rhoStar, 'checkpointSuffix':checkpointSuffix}
+                            'rhoStar':rhoStar, 'Tref':Tref,  'nref':nref,  'checkpointSuffix':checkpointSuffix}
         self.pseudoGene = pseudoGene
 
     def call_gene(self, simulationTime, temperatureHat):
@@ -62,7 +62,7 @@ class GeneInterface(object):
                                                                                                                         
 
 def call_gene_low_level(simulationTime=None, rho=None, temperatureHat=None, densityHat=None, safetyFactor=None, 
-                        ionMass=1, ionCharge=1, Lref=None, Bref=None, rhoStar=None, checkpointSuffix=0):
+                        ionMass=1, ionCharge=1, Lref=None, Bref=None, rhoStar=None, Tref=None, nref=None, checkpointSuffix=0):
     """
     Call GENE using the libgene_tango interface.
     
@@ -77,7 +77,7 @@ def call_gene_low_level(simulationTime=None, rho=None, temperatureHat=None, dens
     
     Inputs:
       simulationTime        amount of time for GENE to simulate in this call.  Measured in Lref/cref (scalar).  labeled simtimelim in libgene_tango.f90
-      rho                   radial grid, rho = r/a for input and output profiles (array)
+      rho                   radial grid, rho = r/a for input and output profiles.  Dimensionless. (array)
       temperatureHat        temperature profile in keV on grid rho (array)
       densityHat            density profile in 10^19 m^-3 on grid rho (array)
       safetyFactor          safety factor q on grid rho (array)
@@ -86,6 +86,8 @@ def call_gene_low_level(simulationTime=None, rho=None, temperatureHat=None, dens
       Lref                  reference length Lref.  Measured in meters.  (scalar)
       Bref                  reference magnetic field, equal to B0 for analytic geometry.  Measured in Tesla. (scalar)
       rhoStar               Parameter equal to rhoref/a = (cref/Omegaref)/a.  Dimensionless. (scalar)
+      Tref                  reference temperature Tref.  Measured in keV.  Used by GENE to determine velocity gridding so Tref should be roughly equal to plasma temperature for best gridding. (scalar)
+      nref                  reference density nref.  Measured in 10^19 m^-3.  nref be roughly equal to plasma density. (scalar)
       checkpointSuffix      What the libgene_tango interface refers to as the "iteration number".  This is the number that gets appended to checkpoint
                               filenames.  E.g., with the default value of 0, filenames end in _000 added. (integer).  Default = 0.  Labeled 'it' in libgene_tango.f90
     
@@ -104,7 +106,7 @@ def call_gene_low_level(simulationTime=None, rho=None, temperatureHat=None, dens
       densityOutput         ? not sure
     """
     # check inputs have been provided
-    for var in (simulationTime, rho, temperatureHat, densityHat, safetyFactor, Lref, Bref, rhoStar):
+    for var in (simulationTime, rho, temperatureHat, densityHat, safetyFactor, Lref, Bref, rhoStar, Tref, nref):
         if var is None:
             #logging.error("Input variables must be provided in call_gene_low_level.")
             raise ValueError
@@ -139,7 +141,7 @@ def call_gene_low_level(simulationTime=None, rho=None, temperatureHat=None, dens
     #logging.info('Running GENE...')
     (MPIrank, dVdxHat, sqrt_gxx, avgParticleFluxHat, avgHeatFluxHat, temperatureOutput, densityOutput) = gene_tango.gene_tango(
                checkpointSuffix, electrostatic, simulationTime, rho, temperatureHatGENE, densityHatGENE, ionMassGENE, ionChargeGENE, toroidalVelocityGENE,
-               rhoStar, safetyFactor, magneticShear, inverseAspectRatio, Lref, Bref,
+               rhoStar, Tref, nref, safetyFactor, magneticShear, inverseAspectRatio, Lref, Bref,
                numRadialGridPts, ionSpeciesCount)
     #logging.info('GENE finished!')
     
@@ -171,12 +173,19 @@ def calculate_magnetic_shear(safetyFactor, psi):
 
     
 def pseudo_call_gene_low_level(simulationTime=None, rho=None, temperatureHat=None, densityHat=None, safetyFactor=None, 
-                        ionMass=1, ionCharge=1, Lref=None, Bref=None, rhoStar=None, checkpointSuffix=0):
+                        ionMass=1, ionCharge=1, Lref=None, Bref=None, rhoStar=None, Tref=None, nref=None, checkpointSuffix=0):
     """Function  to emulate a call to GENE with the same input arguments and return values.
     
     Used for testing other code when the overhead of an actual startup of GENE is not needed.  Of course, this can only
     be used to test correctness of syntax, not correctness of values.
     """
+    
+    # check inputs have been provided
+    for var in (simulationTime, rho, temperatureHat, densityHat, safetyFactor, Lref, Bref, rhoStar, Tref, nref):
+        if var is None:
+            #logging.error("Input variables must be provided in call_gene_low_level.")
+            raise ValueError
+            
     MPIrank = 1
     dVdxHat = np.ones_like(rho)
     sqrt_gxx = np.ones_like(rho)

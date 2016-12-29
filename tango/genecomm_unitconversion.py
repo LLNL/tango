@@ -15,33 +15,29 @@ mp = 1.6726219e-27          # proton mass
 
 ##### Functions converting quantities in SI to GENE's normalized units #####
 
-def density_SI_to_gene(n_SI, nref=1):
-    """Convert a density in SI to a density in GENE's normalized units
+def density_SI_to_gene(n_SI):
+    """Convert a density in SI to a density in GENE's normalized units for input to GENE in libgene_tango
+    
     Inputs:
-      n_SI          density in SI units (array)
-      nref          GENE's nref, measured in 10^19 m^-3 (scalar) (default 1)
+      n_SI         density in SI units (array)
     Outputs:
-      nhat_gene     density in GENE normalized units (array)
+      nHatGene     density in GENE normalized units of 10^19 m^-3 (array)
     """
-    # translate nref conversion factor into SI
     nrefGeneFactor = 1e19
-    nref *= nrefGeneFactor
-    nhat_gene = n_SI / nref
-    return nhat_gene
+    nHatGene = n_SI / nrefGeneFactor
+    return nHatGene
     
-def temperature_SI_to_gene(T_SI, Tref=1):
-    """Convert a temperature in SI to a temperature in GENE's normalized units.
+def temperature_SI_to_gene(T_SI):
+    """Convert a temperature in SI to a temperature in GENE's normalized units for input to GENE in libgene_tango
     
     Inputs:
-      T_SI          tepmerature in SI energy units (array)
-      Tref          GENE's Tref, measured in 1 keV (scalar) (default 1)
+      T_SI         tepmerature in SI energy units (array)
     Outputs:
-      That_gene     temperature in GENE normalized units (array)
+      THatGene     temperature in GENE normalized units of keV (array)
     """
     TrefGeneFactor = 1000 * e
-    Tref *= TrefGeneFactor
-    That_gene = T_SI / Tref
-    return That_gene
+    THatGene = T_SI / TrefGeneFactor
+    return THatGene
 
 def radius_SI_to_libgenetango_input(psi, a):
     """Convert radius in SI to the input length that libgene_tango expects for analytic circular geoemtry.
@@ -138,7 +134,10 @@ def rho_ref(Tref, mref, Bref):
     return rhoref
 
 def Q_ref(nref, Tref, mref, Bref, Lref):
-    """Compute reference heat flux Qref = nref * Tref * cref * rhoref^2 / Lref^2
+    """Compute reference heat flux Qref = nref * Tref * cref * rhoref^2 / Lref^2.  
+    
+    The GENE Documentation, Appendix A, p66 calls this Qgb.
+    
     Inputs:
       nref      measured in 10^19 m^-3 (scalar)
       Tref      measured in keV (scalar)
@@ -153,10 +152,10 @@ def Q_ref(nref, Tref, mref, Bref, Lref):
     
     # convert to SI
     nrefGeneFactor = 1e19
-    nref *= nrefGeneFactor
+    nref_SI = nrefGeneFactor * nref
     Tref_SI = 1000 * e * Tref
     
-    Qref = nref * Tref_SI * cref * rhoref**2 / Lref**2
+    Qref = nref_SI * Tref_SI * cref * rhoref**2 / Lref**2
     return Qref
     
 def calculate_consistent_rhostar(Tref, Bref, mref, minorRadius):
