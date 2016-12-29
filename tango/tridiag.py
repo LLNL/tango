@@ -7,6 +7,7 @@ See https://github.com/LLNL/tango for copyright and license information"""
 
 from __future__ import division
 import numpy as np
+import scipy.linalg
 
 def solve(A, B, C, D):
     """Solve a tridiagonal system Mu = D, where the matrix M is tridiagonal.
@@ -22,8 +23,18 @@ def solve(A, B, C, D):
       We can also write the matrix equation as
     C_j u_{j-1}  +  B_j u_j  +  A_j u_{j+1} = D_j      j = 0, ..., N
     
-    Use the Thomas Algorithm.  For details, see any standard numerical methods textbooks, e.g.,
-    Jardin -- Computational Methods in Plasma Physics, Section 3.2.2
+    Wrapper function for the actual solvers --- solve_python, solve_scipy
+    
+    Inputs:  1D arrays A, B, C, D, each of the same length.
+    Output:  Solution u
+    """
+    return solve_with_scipy(A, B, C, D)
+
+def solve_python(A, B, C, D):
+    """Solve the tridiagonal system in solve() in pure Python using the Thomas Algorithm
+    
+    For details, see any standard methods textbooks, e.g., Jardin -- Computational
+    Methods in Plasma Physics, Section 3.2.2.
     
     Inputs:  1D arrays A, B, C, D, each of the same length.
     Output:  Solution u
@@ -73,6 +84,18 @@ def solve(A, B, C, D):
     assert np.linalg.norm(obs - exp) < tol
     
     """
+
+def solve_with_scipy(A, B, C, D):
+    """Solve the tridiagonal system in solve(), using scipy's banded matrix solver.
+    
+    Scipy calls a Fortran routine and so should be faster than pure python.
+    """
+    # construct the ab matrix needed by the scipy solver
+    ab = np.array((np.roll(A, 1), B, np.roll(C, -1)))   # roll the A and C vectors so that the zero appears in the proper place for the scipy solver
+    l_and_u = (1, 1)  # number of lower and upper diagonals
+    u = scipy.linalg.solve_banded(l_and_u, ab, D)
+    return u
+
     
 def is_diagonally_dominant(A, B, C):
     """The Thomas Algorithm is only guaranteed to be stable if the matrix is diagonally dominant.  This requires
