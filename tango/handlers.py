@@ -135,8 +135,8 @@ class TangoCheckpointHandler(Handler):
     """Handler for writing out a checkpoint for Tango.
     
     Print two files, both in ASCII: Using the default basename=tango_checkpoint, these are
-      tango_checkpoint_prof.txt and tango_checkpoint_ewma.txt.  Will overwrite the previous
-      checkpoint file whenever a new checkpoint is written.
+      tango_checkpoint_prof.txt and tango_checkpoint_ewma.txt.  The previous checkpoint is
+      overwritten whenever a new checkpoint is written.
         
         tango_checkpoint_prof.txt consists of:
           Header: current iteration number
@@ -173,9 +173,9 @@ class TangoHistoryHandler(Handler):
     
     Each time the Handler is executed, add the complete data dict into internal memory.  Save to <basename>.npz,
     overwriting any previous <basename>.npz.  At the first interval, one iteration's worth of data is saved.  At
-    the second interval, two iterations' worth of data is saved, and so on.
+    the second interval, two iterations' worth of data is saved, and so on.  Default basename=tango_history.
     
-    Note that this is intended to save the iterations within a timestep, not across multiple timesteps.
+    This Handler is intended to save the iterations within a timestep, not across multiple timesteps.
     
     Similar to DataSaver in datasaver.py.  But DataSaver does not write data to file until the simulation is over,
     and DataSaver allows the user to specify a subset of data to save.  DataSaver also by default saves the data

@@ -2,7 +2,8 @@
 
 Usage: The usage is modeled after the Python standard logging module.  The user should call setup() only once, after
 MPIrank has been obtained from somewhere.  Further calls to setup() do not do anything.  Within any other Python module
-one wants to use logging, one should import tango_logging and simply call tango_logging.log(message).  
+one wants to use logging, one should import tango_logging and simply call tango_logging.log(message).  If setup() is
+not called, then nothing will happen.
 
 For now, the interface to tango_logging uses only the log() call, unlike the Python logging module which allows debug(),
 info(), warning(), error(), and critical(), as shorthand for log() calls.
@@ -40,7 +41,7 @@ def setup(_parallelEnvironment, _MPIrank):
 
 def log(message, level=None):
     """Wrapper handling logic around the actual logging"""
-    if initialized == True and serial_or_rank0():
+    if initialized and serial_or_rank0():
         _log(message, level)
     
 def _log(message, level=None):
