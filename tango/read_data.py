@@ -40,7 +40,7 @@ def read_tango_checkpoint(**kwargs):
         # look to see how many files in the current directory end in _prof.txt and _ewma.txt
         filesProf = [f for f in files if f.endswith('_prof.txt')]
         filesEWMA = [f for f in files if f.endswith('_ewma.txt')]
-        if filesProf.count == 1 and filesEWMA.count == 1:
+        if len(filesProf) == 1 and len(filesEWMA) == 1:
             # read in these files
             fileProf = filesProf[0]
             fileEWMA = filesEWMA[0]
@@ -57,8 +57,9 @@ def read_tango_checkpoint(**kwargs):
             
 def read_tango_checkpoint_files(fileProf, fileEWMA):
     """Helper file for read_tango_checkpoint()
-    the Profile file consists of [see handlers.py]:
-        Header: current iteration number
+    
+    The profile file consists of [see handlers.py]:
+        Header: current iteration number preceded by a # symbol
         1st column: tango radial grid
         2nd column: pressure profile
         
