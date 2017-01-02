@@ -95,20 +95,3 @@ def solve_with_scipy(A, B, C, D):
     l_and_u = (1, 1)  # number of lower and upper diagonals
     u = scipy.linalg.solve_banded(l_and_u, ab, D)
     return u
-
-    
-def is_diagonally_dominant(A, B, C):
-    """The Thomas Algorithm is only guaranteed to be stable if the matrix is diagonally dominant.  This requires
-
-                            |B_j| > |A_j| + |C_j|,  for all j.
-      
-      Inputs:
-        A, B, C                    1D arrays specifying a tridiagonal matrix (arrays)
-      Outputs:
-        isDiagDominant             True if matrix is diagonally dominant (boolean)
-    """
-    assert len(B)==len(A) and len(C)==len(A), 'lengths must be equal'
-    assert A[-1]==0, 'last element of A must be zero'
-    assert C[0]==0, 'first element of C must be zero'
-    isDiagDominant = np.all(np.abs(B) - (np.abs(A) + np.abs(C)) > 0)
-    return isDiagDominant
