@@ -162,7 +162,7 @@ def calculate_consistent_rhostar(Tref, Bref, mref, minorRadius):
     """Compute a self-consistent rhostar, given Tref, mref, Bref, and minor radius.
     
        rhostar = rhoref/a
-       rhoref = cref/Omegraf
+       rhoref = cref/Omegaref
        cref = sqrt(Tref/mref)
        Omegaref = electron charge * Bref / mref
     

@@ -12,6 +12,17 @@ from . import gene_check
 from . import genecomm
 from . import parameters
 
+# Possible change in the future:  We could get an MPIrank solely within Python using mpi4py, using the  following code.  This would prevent us
+# from having to run # GENE simply to get an MPIrank.  However, the problem with this is that on login nodes on NERSC, where MPI is not
+# available, the import causes # a hard crash.  It is not merely an ImportError; Python itself crashes.  Hence, a try/except block around
+# the import will not work.  The crash is caused by an mpiInit() call in the import.  If I want the code to work on a login node on NERSC,
+# I can't use this method. 
+
+# from mpi4py import MPI
+# MPIrank = MPI.COMM_WORLD.Get_rank()
+# nproc = MPI.COMM_WORLD.Get_size()
+
+
     
 def setup_gene_run(psiTango, psiGene, minorRadius, majorRadius, B0, ionMass, ionCharge, densityTangoGrid, pressureTangoGrid, Bref, Lref, Tref, nref,
                    gridMapper, fromCheckpoint=True, pseudoGene=False):
