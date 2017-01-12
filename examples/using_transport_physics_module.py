@@ -87,7 +87,7 @@ L, N, dr, r, nL, p, D = initialize_diffusion_problem()
 
 MaxIterations, lmparams, tol = initialize_parameters()
 FluxModel = shestakov_nonlinear_diffusion.shestakov_analytic_fluxmodel(dr)
-turbhandler = tng.TurbulenceHandler(dr, r, lmparams, FluxModel)
+turbhandler = tng.lodestro_method.TurbulenceHandler(dr, r, lmparams, FluxModel)
 
 # initialize transport module: profiles (with a slight modification to set Vprime to psi=r/a)
 mu = 1

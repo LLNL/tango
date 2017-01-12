@@ -1,7 +1,7 @@
 """See https://github.com/LLNL/tango for copyright and license information"""
 
-from .lodestro_method import TurbulenceHandler
-from .HToMatrixFD import H_to_matrix, solve
+from . import lodestro_method
+from . import HToMatrixFD
 from . import datasaver
 from . import solver
 from . import physics

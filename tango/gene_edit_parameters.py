@@ -70,6 +70,8 @@ major_R = 1.0000000
 See https://github.com/LLNL/tango for copyright and license information
 """
 
+from __future__ import division
+
 def read_parameters_file(parametersFilename):
     """Read parameters file into memory as a string.
     
@@ -139,6 +141,13 @@ def do_modify_parameters_string(parametersString, varName, newVarValueStr):
 def extract_line_with_variable(parametersString, varName):
     """Extract a substring of the form <varName> = <value> from a file.  The file is assumed to contain multiple lines, 
     consisting of at most one <varName> = <value> statement, with nothing else on the line.
+    
+    Warning: If there is more than one line with the same varName, then currently the *first* line is found and modified.  This
+    can be a problem if, for example, a line with the same variable name is commented out.  E.g.,
+            ! n_procs_x = 4
+            n_procs_x = 12
+    For now, since this function does not check for comments, one must ensure that there are no commented lines with duplicates
+    of variables that might be changed.
     
     Inputs:
       parametersString      entire parameters file (string)

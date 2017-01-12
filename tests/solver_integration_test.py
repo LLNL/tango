@@ -114,7 +114,7 @@ def problem_setup():
     L, N, dx, x, nL, n = initialize_shestakov_problem()
     MaxIterations, lmparams, tol = initialize_parameters()
     FluxModel = shestakov_nonlinear_diffusion.shestakov_analytic_fluxmodel(dx)
-    turbhandler = tng.TurbulenceHandler(dx, x, lmparams, FluxModel)
+    turbhandler = tng.lodestro_method.TurbulenceHandler(dx, x, lmparams, FluxModel)
     compute_all_H = ComputeAllH(turbhandler)
     t_array = np.array([0, 1e4])  # specify the timesteps to be used.
     return (L, N, dx, x, nL, n, MaxIterations, tol, turbhandler, compute_all_H, t_array)

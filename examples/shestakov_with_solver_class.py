@@ -65,7 +65,7 @@ logging.info("Initializing...")
 L, N, dx, x, nL, n = initialize_shestakov_problem()
 maxIterations, lmparams, tol = initialize_parameters()
 FluxModel = shestakov_nonlinear_diffusion.shestakov_analytic_fluxmodel(dx)
-turbhandler = tng.TurbulenceHandler(dx, x, lmparams, FluxModel)
+turbhandler = tng.lodestro_method.TurbulenceHandler(dx, x, lmparams, FluxModel)
 
 t_array = np.array([0, 1e4])  # specify the timesteps to be used.
 

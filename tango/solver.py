@@ -79,7 +79,7 @@ class Solver(object):
                 self.reachedEnd = True
         
         
-        # Data Saver: Save some stuff   
+        ##### Section for saving data ####
         self.errHistoryFinal = self.errHistory[0:self.l]
         (EWMAParamTurbFlux, EWMAParamProfile) = self.turbhandler.get_ewma_params()
         
@@ -88,8 +88,8 @@ class Solver(object):
         self.dataSaverHandler.add_one_off_data(timestepData)
         self.dataSaverHandler.save_to_file(self.m)
         self.dataSaverHandler.reset_for_next_timestep()
-        
         self.fileHandlerExecutor.reset_handlers_for_next_timestep()
+        ##### End of section for saving data ##### 
         
         self.profile_mminus1 = self.profile
 
@@ -165,6 +165,13 @@ class Solver(object):
         For example, if tArray = [0 2.5 10], then for timestep_number = 1, we are looking for the solution at
         t[1]=2.5, so t_new = 2.5 and dt = 2.5.  If timestep_number = 2, we are looking for the solution at t[2],
         so t_new = 10 and dt = 7.5.
+        
+        Inputs:
+          tArray                times at which solution is desired.  Initial time should be first element (array)
+          timestepNumber        timestep number corresponding to the desired solution time (integer)
+        Outputs:
+          tNew                  Desired solution time (scalar)
+          dt                    time difference between desired solution time and previous time (scalar)
         """
         tNew = tArray[timestepNumber]
         tOld = tArray[timestepNumber - 1]
@@ -186,7 +193,7 @@ class Solver(object):
 
     @staticmethod            
     def _merge_two_dicts(x, y):
-        """Given two dicts, merge them into a new dict as a shallow copy."""
+        """Given two dicts, merge them into a new dict using a shallow copy."""
         z = x.copy()
         z.update(y)
         return z

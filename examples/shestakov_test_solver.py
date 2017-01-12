@@ -69,7 +69,7 @@ MaxIterations, lmparams, tol = initialize_parameters()
 
            
 FluxModel = shestakov_nonlinear_diffusion.shestakov_analytic_fluxmodel(dx)
-turbhandler = tng.TurbulenceHandler(dx, x, lmparams, FluxModel)
+turbhandler = tng.lodestro_method.TurbulenceHandler(dx, x, lmparams, FluxModel)
 errhistory = np.zeros(MaxIterations-1)      # error history vs. iteration at a given timestep
 t = np.array([0, 1e4])  # specify the timesteps to be used.
 n_mminus1 = n           # initialize "m minus 1" variables for the first timestep
@@ -86,13 +86,13 @@ for m in range(1, len(t)):
         (H1, H2, H3, H4, H6, H7) = Compute_Hs(x, n, turbhandler)
         
         # compute matrix system (A, B, C, f)
-        (A, B, C, f) = tng.H_to_matrix(dt, dx, nL, n_mminus1, H1, H2=H2, H3=H3, H4=H4, H6=H6, H7=H7)
+        (A, B, C, f) = tng.HToMatrixFD.H_to_matrix(dt, dx, nL, n_mminus1, H1, H2=H2, H3=H3, H4=H4, H6=H6, H7=H7)
 
         converged, rms_error, resid = CheckConvergence(A, B, C, f, n, tol)
         errhistory[l-1] = rms_error
         
         # compute new iterate n
-        n = tng.solve(A, B, C, f)
+        n = tng.HToMatrixFD.solve(A, B, C, f)
                
         # Check for NaNs or infs
         if np.all(np.isfinite(n)) == False:
