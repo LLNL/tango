@@ -9,15 +9,15 @@ Tango is designed to couple with the gyrokinetic turbulence simulation code [GEN
 ## Saving data to files
 Tango has a few ways for saving data to file.
 
-1. Tango saves data to a file at the end of the program (this may change in the future to save to a file occasionally during operation in case of program failure).  For each timestep, two files are saved: one containing arrays relevant to the entire timestep,  and another containing the data for all iterations of the 1D arrays that changes on each iteration within the timestep.
+1) Tango saves data to a file at the end of the program (this may change in the future to save to a file occasionally during operation in case of program failure).  For each timestep, two files are saved: one containing arrays relevant to the entire timestep,  and another containing the data for all iterations of the 1D arrays that changes on each iteration within the timestep.
 
 The user specifies a basename and the files are saved with a suffix `#_timestep` and `#_iterations`, where `#` corresponds to the timestep number.  In other words, if the basename were `data`, then the two saved data files for the second timestep would be `data2_timestep.npz` and `data2_iterations.npz`.   The files are saved in the `.npz` format, which is numpy's default format for saving multiple arrays.
 
 Instead of saving all possible arrays, the user specifies which arrays are saved to file.  This allows to save disk space while still allowing flexibility in case the full storage of all arrays is desired.
 
-2. Checkpointing.  (For now, see source code for description)
+2) Checkpointing.  (For now, see source code for description)
 
-3. Intermittent history saving on the fly.  In case of a fatal crash in the middle of operation which might occur in the turbulence code, Tango also can save data to disk in the course of operation, using the `TangoHistoryHandler`.  (For now, see source code for description)
+3) Intermittent history saving on the fly.  In case of a fatal crash in the middle of operation which might occur in the turbulence code, Tango also can save data to disk in the course of operation, using the `TangoHistoryHandler`.  (For now, see source code for description)
 
 
 ## Source Code Style Convention
