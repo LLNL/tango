@@ -23,7 +23,7 @@ Equation (1) is the equation that this module helps to solve.  Here, d_t U^{l+1}
 
     d_t U^{l+1} = (U^{l+1} - U^{m-1, infinity}) / delta t
 
-Because the H_i coefficients are evaluted at the previous iterate l, Equation (1) is linear in the unknown U^{l+1}.  The H_i
+Because the H_i coefficients are evaluated at the previous iterate l, Equation (1) is linear in the unknown U^{l+1}.  The H_i
 coefficients are specified by the user as arrays, not as a user-supplied function.  Hence the user computes the H_i externally
 and supplies them to this module for each iteration.
 
@@ -273,26 +273,25 @@ def _fbeta(H2Half, H3Half, dx):
     integer gridpoints].  Each beta_j+1/2 is determined locally from H2_j+1/2 and H3_j+1/2.
     """
     gamma = 0.9
-    c_half = -H3Half    
+    cHalf = -H3Half    
     betaHalf = np.zeros_like(H3Half)
     betaStar = np.zeros_like(betaHalf)
     
     
     # positive c
-    # note, numpy logical_and only take 2 arguments max; use reduce to allow many arguments
-    ind1 = c_half > 0
-    betaStar[ind1] = 1 - H2Half[ind1] / (c_half[ind1] * dx)
-    betaHalf[np.logical_and(ind1, betaStar <= 1/2)] = 1/2
-    betaHalf[np.logical_and(ind1, betaStar > 1/2)] = gamma * betaStar[np.logical_and(ind1, betaStar > 1/2)] + (1-gamma)
+    ind1 = cHalf > 0
+    betaStar[ind1] = 1 - H2Half[ind1] / (cHalf[ind1] * dx)
+    betaHalf[ind1 & (betaStar <= 1/2)] = 1/2
+    betaHalf[ind1 & (betaStar > 1/2)] = gamma * betaStar[ind1 & (betaStar > 1/2)] + (1-gamma)
     
     # zero c
-    ind2 = c_half == 0  # chat must be 0 (meaning gammabar must be 0)
+    ind2 = cHalf == 0  # c_hat must be 0 (meaning gammabar must be 0)
     betaHalf[ind2] = 0      # does not matter what this value is when c=0
     
     # negative c
-    ind3 = c_half < 0
-    betaStar[ind3] = -H2Half[ind3] / (c_half[ind3] * dx)
-    betaHalf[np.logical_and(ind3, betaStar >= 1/2)] = 1/2
-    betaHalf[np.logical_and(ind3, betaStar < 1/2)] = gamma * betaStar[np.logical_and(ind3, betaStar < 1/2)]
-    
+    ind3 = cHalf < 0
+    betaStar[ind3] = -H2Half[ind3] / (cHalf[ind3] * dx)
+    betaHalf[ind3 & (betaStar >= 1/2)] = 1/2
+    betaHalf[ind3 & (betaStar < 1/2)] = gamma * betaStar[ind3 & (betaStar < 1/2)]
+
     return betaHalf

@@ -25,8 +25,8 @@ def initialize_shestakov_problem():
     dx = L / (N-1)  # spatial grid size
     x = np.arange(N)*dx # location corresponding to grid points j=0, ..., N-1
     nL = 1e-2           # right boundary condition
-    n_initialcondition = 1 - 0.5*x
-    return (L, N, dx, x, nL, n_initialcondition)
+    nInitialCondition = 1 - 0.5*x
+    return (L, N, dx, x, nL, nInitialCondition)
 
 def initialize_parameters():
     maxIterations = 1000
@@ -63,20 +63,20 @@ logging.basicConfig(filename=logfile, filemode='w', level=logging.INFO)
 
 logging.info("Initializing...")
 L, N, dx, x, nL, n = initialize_shestakov_problem()
-maxIterations, lmparams, tol = initialize_parameters()
-FluxModel = shestakov_nonlinear_diffusion.shestakov_analytic_fluxmodel(dx)
-turbhandler = tng.lodestro_method.TurbulenceHandler(dx, x, lmparams, FluxModel)
+maxIterations, lmParams, tol = initialize_parameters()
+fluxModel = shestakov_nonlinear_diffusion.shestakov_analytic_fluxmodel(dx)
+turbHandler = tng.lodestro_method.TurbulenceHandler(dx, x, lmParams, fluxModel)
 
-t_array = np.array([0, 1e4])  # specify the timesteps to be used.
+tArray = np.array([0, 1e4])  # specify the timesteps to be used.
 
-compute_all_H = ComputeAllH(turbhandler)
-solver = tng.solver.Solver(L, x, n, nL, t_array, maxIterations, tol, compute_all_H, turbhandler)
+compute_all_H = ComputeAllH(turbHandler)
+solver = tng.solver.Solver(L, x, n, nL, tArray, maxIterations, tol, compute_all_H, turbHandler)
 
 # set up data logger
-arrays_to_save = ['H2', 'H3', 'profile']  # for list of possible arrays, see solver._pkgdata()
-data_basename = 'shestakov_solution_data'
-solver.dataSaverHandler.initialize_datasaver(data_basename, maxIterations, arrays_to_save)
-logging.info("Preparing DataSaver to save files with prefix {}.".format(data_basename))
+arraysToSave = ['H2', 'H3', 'profile']  # for list of possible arrays, see solver._pkgdata()
+dataBasename = 'shestakov_solution_data'
+solver.dataSaverHandler.initialize_datasaver(dataBasename, maxIterations, arraysToSave)
+logging.info("Preparing DataSaver to save files with prefix {}.".format(dataBasename))
 
 logging.info("Initialization complete.")
 
@@ -93,18 +93,21 @@ n = solver.profile  # finished solution
 nss = shestakov_nonlinear_diffusion.GetSteadyStateSolution(x, nL)
 
 fig = plt.figure()
-plt.plot(x, n, 'b-')
-plt.plot(x, nss, 'r-')
+line1, = plt.plot(x, n, 'b-', label='numerical solution')
+line2, = plt.plot(x, nss, 'r-', label='analytic solution')
+plt.xlabel('x')
+plt.ylabel('n')
+plt.legend(handles=[line1, line2])
 
-solution_residual = (n - nss) / np.max(np.abs(nss))
-solution_rms_error = np.sqrt( 1/len(n) * np.sum(solution_residual**2))
+solutionResidual = (n - nss) / np.max(np.abs(nss))
+solutionRmsError = np.sqrt( 1/len(n) * np.sum(solutionResidual**2))
 
 if solver.reachedEnd == True:
     print("The solution has been reached successfully.")
-    print('Error compared to analytic steady state solution is %f' % (solution_rms_error))
+    print('Error compared to analytic steady state solution is %f' % (solutionRmsError))
 else:
     print("The solver failed for some reason.  See log file {}".format(logfile))
-    print('Error at end compared to analytic steady state solution is %f' % (solution_rms_error))
+    print('Error at end compared to analytic steady state solution is %f' % (solutionRmsError))
 
 
 #plt.figure()
@@ -113,7 +116,7 @@ else:
 #plt.ylabel('rms error')
 #plt.plot(x, n-nss)
 #plt.ylim(ymin=0)
-filename = data_basename + "1"
+filename = dataBasename + "1"
 Timestep = tango.analysis.TimestepData(filename)
 lastiter = Timestep.get_last_iteration()
 lastiter.plot_profile_and_starting_profile(savename='solution.png')

@@ -348,15 +348,15 @@ class FluxSplit(object):
         dpdxThreshold = thetaParams['dpdxThreshold'] # scalar
         
         ind1 = DHat < Dmin
-        ind2 = np.logical_and.reduce((abs(dpdx) < dpdxThreshold, DHat >= Dmin, DHat <= Dmax))
-        ind3 = np.logical_and(abs(dpdx) < dpdxThreshold, DHat > Dmax)
+        ind2 = (abs(dpdx) < dpdxThreshold) & (DHat >= Dmin) & (DHat <= Dmax)
+        ind3 = (abs(dpdx) < dpdxThreshold) & (DHat > Dmax)
         
         theta = np.ones_like(DHat)
         theta[ind1] = 0
         theta[ind2] = (Dmax - DHat[ind2]) / (Dmax - Dmin)
         theta[ind3] = 0
         
-        assert np.count_nonzero(np.logical_and(theta>=0, theta<=1)) == np.size(theta), 'some theta is not between 0 and 1'
+        assert np.count_nonzero((theta >= 0) & (theta <= 1)) == np.size(theta), 'some theta is not between 0 and 1'
         return theta
     
         

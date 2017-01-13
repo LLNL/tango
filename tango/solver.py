@@ -149,6 +149,7 @@ class Solver(object):
 
     def check_convergence(self, A, B, C, f, profile, tol):
         # convergence check: is || ( M[n^l] n^l - f[n^l] ) / max(abs(f)) || < tol
+        #   where n^l is solved from M[n^{l-1}] n^l = f[n^{l-1}]
         # could add more convergence checks
         resid = A*np.concatenate((profile[1:], np.zeros(1))) + B*profile + C*np.concatenate((np.zeros(1), profile[:-1])) - f
         resid = resid / np.max(np.abs(f))  # normalize residuals
