@@ -1,8 +1,8 @@
 """
-gene_edit_parameters
+parameters
 
-Provide a Python interface for modifying the GENE parameters file.  This module allows one to edit various parameters
-that do not exist within the libgene_tango interface.
+Provide a Python interface for reading and modifying the GENE parameters file.  This module allows one to edit various
+parameters that do not exist within the libgene_tango interface.
 
 The parameters file has many lines, each consisting of at most one <varname> = <value> statement.  A very short sample
 of a GENE parameters file looks like.
