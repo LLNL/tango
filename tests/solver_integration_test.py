@@ -106,6 +106,33 @@ def test_solver_not_converging():
     os.remove(datasavename_timestep)
     os.remove(databasename + "1_iterations.npz")
     
+def test_solver_small_ewma_param():
+    """Test that proper convergence is reached for small EWMA parameters.  Previously, a bug prevented
+    full convergence for EWMAParam <~ 0.01 but worked at larger values."""
+    L, N, dx, x, nL, n = initialize_shestakov_problem()
+    junk, lmParams, junk2 = initialize_parameters()
+    
+    
+    # adjust the EWMA parameter
+    EWMAParam = 0.01
+    lmParams['EWMAParamTurbFlux'] = EWMAParam
+    lmParams['EWMAParamProfile'] = EWMAParam
+
+    maxIterations = 4000
+    tol = 1e-9
+    fluxModel = shestakov_nonlinear_diffusion.shestakov_analytic_fluxmodel(dx)
+    turbHandler = tng.lodestro_method.TurbulenceHandler(dx, x, lmParams, fluxModel)
+    compute_all_H = ComputeAllH(turbHandler)
+    t_array = np.array([0, 1e4])  # specify the timesteps to be used.
+    
+    solver = tng.solver.Solver(L, x, n, nL, t_array, maxIterations, tol, compute_all_H, turbHandler)
+    while solver.ok:
+        # Implicit time advance: iterate to solve the nonlinear equation!
+        solver.take_timestep()
+        
+    selfConsistencyErrorFinal = solver.errHistoryFinal[-1]
+    assert selfConsistencyErrorFinal <= tol
+    
 #==============================================================================
 #    End of tests.  Below are helper functions used by the tests
 #==============================================================================

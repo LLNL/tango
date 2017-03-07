@@ -98,12 +98,22 @@ class TurbulenceHandler(object):
           H3contrib         array
           data              other data
         """
+        # map the profile from the transport grid onto the turbulence grid
         profileTurbGrid = self.gridMapper.map_profile_onto_turb_grid(profile)
+        
+        # calculate the next iterate of the relaxed profile using EWMA
         profileEWMATurbGrid = self.lodestroMethod.ewma_profile(profileTurbGrid) # could also reverse the order of this and the previous step...
         
+        # calculate the next sample of flux as a function of space
         fluxTurbGrid = self.fluxModel.get_flux(profileEWMATurbGrid)
+        
+        # calculate the next iterate of relaxed flux using EWMA
         fluxEWMATurbGrid = self.lodestroMethod.ewma_turb_flux(fluxTurbGrid)
+        
+        # Convert the flux into effective transport coefficients
         (DTurbGrid, cTurbGrid, DcDataTurbGrid) = self.lodestroMethod.flux_to_transport_coeffs(fluxEWMATurbGrid, profileEWMATurbGrid, self.dx)
+        
+        # Map the transport coefficients from the turbulence grid back to the transport grid
         (D, c) = self.gridMapper.map_transport_coeffs_onto_transport_grid(DTurbGrid, cTurbGrid)
         (H2contrib, H3contrib) = self.Dc_to_Hcontrib(D, c)
         
@@ -310,7 +320,7 @@ class FluxSplit(object):
           |grad psi|^2.  It is absorbed into the effective diffusive coefficient D returned by this function.  Note the dimensions of D
           are different than the dimensions of D2 if |grad psi|^2 is not dimensionless.       
         """
-        dpdx = derivatives.dx_centered_difference(p, dx)
+        dpdx = derivatives.dx_centered_difference_edge_first_order(p, dx)
         DHat = -flux / dpdx
         DHat[dpdx==0] = 0     # get rid of infinities resulting from divide by zero
         cHat = flux / p
