@@ -35,7 +35,7 @@ class TurbulenceHandler(object):
     Since the class provides the H coefficients, and not simply diffusion coefficients, it must
     be aware of the coordinate geometric factor V' = dV/dpsi.
     """
-    def __init__(self, dx, x, lmParams, fluxModel, gridMapper=None, Vprime=None):
+    def __init__(self, dx, x, lmParams, fluxModel, gridMapper=None, Vprime=None, fluxSmoother=None):
         """A geometric factor Vprime may be optionally provided to the constructor.  This 
             geometric factor is essentially a Jacoabian and appears in transport equations
             in non-Cartesian geometry.  It typically appears in the form
@@ -81,6 +81,14 @@ class TurbulenceHandler(object):
             self.isNonCartesian = True
         else:
             self.isNonCartesian = False
+            
+        if fluxSmoother is not None:
+            assert hasattr(fluxSmoother, 'smooth') and callable(getattr(fluxSmoother, 'smooth'))
+            self.fluxSmoother = fluxSmoother
+            self.doSmoothing = True
+        else:
+            self.doSmoothing = False
+            
         
     def Hcontrib_turbulent_flux(self, profile):
         """Given the lth iterate of a profile (e.g., n), perform all the steps necessary to
@@ -107,8 +115,14 @@ class TurbulenceHandler(object):
         # calculate the next sample of flux as a function of space
         fluxTurbGrid = self.fluxModel.get_flux(profileEWMATurbGrid)
         
+        # spatially smooth the flux, if specified
+        if self.doSmoothing:
+            smoothedFluxTurbGrid = self.fluxSmoother.smooth(fluxTurbGrid)
+        else:
+            smoothedFluxTurbGrid = fluxTurbGrid
+        
         # calculate the next iterate of relaxed flux using EWMA
-        fluxEWMATurbGrid = self.lodestroMethod.ewma_turb_flux(fluxTurbGrid)
+        fluxEWMATurbGrid = self.lodestroMethod.ewma_turb_flux(smoothedFluxTurbGrid)
         
         # Convert the flux into effective transport coefficients
         (DTurbGrid, cTurbGrid, DcDataTurbGrid) = self.lodestroMethod.flux_to_transport_coeffs(fluxEWMATurbGrid, profileEWMATurbGrid, self.dx)
@@ -123,7 +137,7 @@ class TurbulenceHandler(object):
         data = {'x': x, 'xTurbGrid': xTurbGrid,
                 'D': D, 'c': c,
                 'profileTurbGrid': profileTurbGrid, 'profileEWMATurbGrid': profileEWMATurbGrid,
-                'fluxTurbGrid': fluxTurbGrid, 'fluxEWMATurbGrid': fluxEWMATurbGrid,
+                'fluxTurbGrid': fluxTurbGrid, 'smoothedFluxTurbGrid': smoothedFluxTurbGrid, 'fluxEWMATurbGrid': fluxEWMATurbGrid,
                 'DTurbGrid': DTurbGrid, 'cTurbGrid': cTurbGrid,
                 'DHatTurbGrid': DcDataTurbGrid['DHat'], 'cHatTurbGrid': DcDataTurbGrid['cHat'], 'thetaTurbGrid': DcDataTurbGrid['theta']}
         return (H2contrib, H3contrib, data)
