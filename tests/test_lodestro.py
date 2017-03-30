@@ -24,3 +24,5 @@ def test_NextEWMAiterate():
     obs = yEWMA4
     exp = 1.398528
     assert(np.isclose(obs, exp, rtol=0, atol=1e-13))
+    
+# need to do a LOT more testing...

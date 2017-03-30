@@ -25,7 +25,7 @@ def moving_average(x, windowSize):
     
     Inputs:
       x                 input data (array)
-      windowSize        size of moving average window (odd integer)
+      windowSize        size of moving average window in points (odd integer)
     Outputs:
       xAvg              output data (array)
     """

@@ -35,7 +35,7 @@ class TurbulenceHandler(object):
     Since the class provides the H coefficients, and not simply diffusion coefficients, it must
     be aware of the coordinate geometric factor V' = dV/dpsi.
     """
-    def __init__(self, dx, x, lmParams, fluxModel, gridMapper=None, Vprime=None, fluxSmoother=None):
+    def __init__(self, dxTurbGrid, x, lmParams, fluxModel, gridMapper=None, Vprime=None, fluxSmoother=None):
         """A geometric factor Vprime may be optionally provided to the constructor.  This 
             geometric factor is essentially a Jacoabian and appears in transport equations
             in non-Cartesian geometry.  It typically appears in the form
@@ -62,7 +62,7 @@ class TurbulenceHandler(object):
               Vprime      (optional) geometric coefficients dV/dpsi depending on coordinate system (array)
                                 default: None [V'=1 everywhere]
         """
-        self.dx = dx
+        self.dxTurbGrid = dxTurbGrid
         self.x = x
         self.lodestroMethod = lm(lmParams['EWMAParamTurbFlux'], lmParams['EWMAParamProfile'], lmParams['thetaParams'])
         
@@ -125,7 +125,7 @@ class TurbulenceHandler(object):
         fluxEWMATurbGrid = self.lodestroMethod.ewma_turb_flux(smoothedFluxTurbGrid)
         
         # Convert the flux into effective transport coefficients
-        (DTurbGrid, cTurbGrid, DcDataTurbGrid) = self.lodestroMethod.flux_to_transport_coeffs(fluxEWMATurbGrid, profileEWMATurbGrid, self.dx)
+        (DTurbGrid, cTurbGrid, DcDataTurbGrid) = self.lodestroMethod.flux_to_transport_coeffs(fluxEWMATurbGrid, profileEWMATurbGrid, self.dxTurbGrid)
         
         # Map the transport coefficients from the turbulence grid back to the transport grid
         (D, c) = self.gridMapper.map_transport_coeffs_onto_transport_grid(DTurbGrid, cTurbGrid)
@@ -163,7 +163,7 @@ class TurbulenceHandler(object):
         """Transform the effective diffusion coefficient D and effective convective velocity c
         into the contributions to the H coefficients for the iteration-update solver for the
         transport equation.  The form of the transport equation for ion pressure is 
-                3/2 V' dp/dt - d/dpsi[ V' D dp/dpsi - V'c p] 
+                3/2 V' dp/dt - d/dpsi[ V' D dp/dpsi - V'c p] + ...
         Hence, H2 = V'*D  and  H3 = -V'*c.
         """
         #  Should change this to use the physics_to_H module

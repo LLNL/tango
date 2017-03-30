@@ -141,7 +141,7 @@ def sigma_to_chi(sigma, gradpsisq):
 
 
 def mockup_trapezoidal_chi(psi1, psi2, chiMax, psi):
-    """Create a diffusivity chi in the same of a trapezoid on the grid psi.
+    """Create a diffusivity chi in the shape of a trapezoid on the grid psi.
   
 chi(psi) looks like:  
     

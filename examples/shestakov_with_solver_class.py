@@ -33,8 +33,8 @@ def initialize_parameters():
     thetaParams = {'Dmin': 1e-5,
                    'Dmax': 1e13,
                    'dpdxThreshold': 10}
-    EWMAParamTurbFlux = 0.30
-    EWMAParamProfile = 0.30
+    EWMAParamTurbFlux = 0.3
+    EWMAParamProfile = 0.3
     lmParams = {'EWMAParamTurbFlux': EWMAParamTurbFlux,
             'EWMAParamProfile': EWMAParamProfile,
             'thetaParams': thetaParams}
