@@ -85,7 +85,149 @@ class GridInterfaceTangoOutside(object):
         return self.psiTango
     def get_x_turbulence_grid(self):
         return self.psiGene
+        
+        
+class TangoOutsideExtrapCoeffs(object):
+    """Class for interacing Tango's grid and GENE's grid where at the outer boundary, Tango's grid
+      extends radially outward farther than GENE's.  At the inner bounadry, Tango's grid extends
+      radially inward farther than GENE's.
+      
+    Similar to TangoOutside, but this class will extrapolate the transport coefficients on the outer
+    region when mapping from the turbulence grid to the transport grid rather than just adding zeros.
+    
+    Mapping a profile from the transport grid onto GENE's grid: since Tango's domain is larger in
+    both directions, we can use a simple interpolating spline
+    
+    Mapping transport coefficients from GENE's grid to Tango's grid: we first resample the transport
+    coefficients on the part of Tango's grid that overlaps with GENE's grid, then extrapolate for the
+    outer region.
+    
+    The point of this extrapolation is to eliminate the effects of the buffer zone.  Introduce the
+    definitions:
+        L                   size of domain and the right-hand boundary
+        xTurbBnd            x coordinate of the end of the turbulence grid (should equal the end of the buffer zone)
+        xRBufferBegin       x coordinate of the beginning of the right buffer
+        xRBufferEnd         x coordinate of the end of the right buffer
+        xEL                 x coordinate of the left side of the extrapolation zone
+        xER                 x xoordinate of the right side of the extrapolation zone
+    
+    We will have xEL < xER < xRBufferBegin < xRBufferEnd == xTurbBnd < L.
+    
+    The turbulent flux (or rather here, we speak of transport coefficients) will nominally be zero for
+    xTurbBnd < x < L.  But also, the transport coefficients cannot be trusted in the buffer zone either,
+    i.e. xRBufferBegin < x < xTurnBnd.  [And probably, the transport coefficient cannot be trusted a
+    little to the left of xRBufferBegin.]  So, the solution here will be to throw out that data and pretend
+    that an extrapolation of the transport coefficient from data that can be trusted to these regions is
+    sufficient.  We will use data from the region xEL <= x <= xER and extrapolate this to the region
+    xER < x < L, REPLACING whatever the turbulent flux provided in the region XER < x < L previously.  The
+    extrapolation here is done simply, using a low order polynomial.
+    
+    The purpose here is solely to generate an overall transport coefficient that is smooth, so the solution
+    is smooth (and can be easily converged to numerically).  The physics cannot be trusted where the
+    turbulent flux is inaccurate, so we are not concerned with getting an accurate solution in that region.
+    Instead the concern is making sure we can get a smooth solution at all.
+    
+    
+    """
+    def __init__(self, xTango, xTurb, xExtrapZoneLeft, xExtrapZoneRight, polynomialDegree):
+        assert xTango[-1] >= xTurb[-1]
+        self.xTango = xTango  # values of coordinate x on tango's grid
+        self.xTurb = xTurb    # values of x on turbulent grid
+        self.xExtrapZoneLeft = xExtrapZoneLeft          # x coordinate of left side of the extrapolation zone
+        self.xExtrapZoneRight = xExtrapZoneRight        # x coordinate of the right side of the extrapolation zone
+        self.polynomialDegree = polynomialDegree        # degree of polynomial to use when extrapolating
+    def map_profile_onto_turb_grid(self, profileTango):
+        """Since Tango's domain is larger than GENE's in both directions, we can use a simple interpolating spline to 
+        resample the profile on GENE's grid.
+        """
+        interpolate = scipy.interpolate.InterpolatedUnivariateSpline(self.xTango, profileTango)
+        profileTurb = interpolate(self.xTurb)
+        return profileTurb
+    def map_transport_coeffs_onto_transport_grid(self, DTurbGrid, cTurbGrid):
+        DTango = self.map_to_transport_grid(DTurbGrid, enforcePositive=True)
+        cTango = self.map_to_transport_grid(cTurbGrid)
+        return (DTango, cTango)
+    def map_to_transport_grid(self, fTurb, enforcePositive=False):
+        """Map a quantity f (typically a transport coefficient) from GENE's grid to tango's grid.
+        
+        Here, tango's grid extends further than GENE's (which occurs at both the inner boundary and the
+        outer boundary), so the transport coefficient is set to zero in the nonoverlapping region on the
+        left.  On the right, the transport coefficient is extrapolated using a polynomial
 
+        GENE's turbulence goes to zero in its buffer zone at the boundaries of its domain.  Therefore, the
+        transport coefficients returned by GENE should go to zero.
+        
+        Sometimes, interpolation might produce negative values when zero is the minimum for physical reasons.
+        The diffusion coefficient is one example where one wants to maintain positivity.  In this case, one
+        can optionally enforce positivity of the returned value by zeroing out negative values.
+        
+        Inputs:
+          fTurb               f(x) on the turbulence grid (array)
+          enforcePositive     (optional). If True, set any negative values to zero before returning (boolean)
+        
+        Outputs:
+          fTango              f(x) on the Tango grid (array)
+        """
+        fTango = zeropad_on_left_extrap_on_right(self.xTurb, fTurb, self.xTango, self.xExtrapZoneLeft, self.xExtrapZoneRight, self.polynomialDegree, enforcePositive=enforcePositive) 
+        return fTango
+    def get_x_transport_grid(self):
+        return self.xTango
+    def get_x_turbulence_grid(self):
+        return self.xTurb        
+        
+
+def zeropad_on_left_extrap_on_right(xIn, fIn, xOut, xExtrapZoneLeft, xExtrapZoneRight, polynomialDegree, enforcePositive=False):
+    """Extending a function to another domain.  Where the function is not originally defined, use
+    zeros on the left and extrapolation on the right to provide new values.
+    
+    The domains xIn and xOut should satsify xOut[0] < xIn[0] and xOut[-1] > xIn[0].  The output
+    domain extends farther than the input domain on both sides.
+    
+    This function operates by resampling within the overlapping region, and then extending.
+    
+    Sometimes, interpolation might produce negative values when zero is the minimum for physical reasons.
+        The diffusion coefficient is one example where one wants to maintain positivity.  In this case, one
+        can optionally enforce positivity of the returned value by zeroing out negative values.
+        
+    Inputs:
+      xIn                   independent variable on the input domain (array)
+      fIn                   dependent variable on the input domain (array)
+      xOut                  independent variable on the new domain (array)
+      xExtrapZoneLeft       x coordinate of left side of extrapolation zone (scalar)
+      xExtrapZoneRight      x coordinate of right side of extrapolation zone (scalar)
+      polynomialDegree      degree of polynomial for extrapolation (integer)
+      enforcePositive       (optional) If True, set any negative values to zero before returning (boolean)
+        
+    Outputs:
+      fOut                  dependent variable on the new domain (array)
+    """
+    assert xOut[0] <= xIn[0] and xOut[-1] >= xIn[-1]
+    fOut = np.zeros_like(xOut)  # initialize with zeros  
+    
+    # left side region ... zeros
+    
+    # =============== interpolation region: xIn[0] <= x <= xExtrapZoneRight ===============
+    interpolatorInterior = scipy.interpolate.InterpolatedUnivariateSpline(xIn, fIn)
+    ind1 = (xOut >= xIn[0]) & (xOut <= xExtrapZoneRight)
+    fOut[ind1] = interpolatorInterior(xOut[ind1])
+    
+    # =============== extrapolation region xExtrapZoneLeft < x ===============
+    # first, fit the polynomial model using data within xExtrapZoneLeft <= x <= xExtrapZoneRight
+    ind2 = (xIn >= xExtrapZoneLeft) & (xIn <= xExtrapZoneRight)
+    xPoly = xIn[ind2]
+    fPoly = fIn[ind2]
+    p = np.polyfit(xPoly, fPoly, polynomialDegree)
+    
+    # second, use the model to predict f in the region xExtrapZoneRight < x
+    ind3 = xOut > xExtrapZoneRight 
+    fOut[ind3] = np.polyval(p, xOut[ind3])
+    
+    if enforcePositive == True:
+        ind = fOut < 0
+        fOut[ind] = 0  
+    return fOut        
+        
+        
 class GridInterfaceTangoInside(object):
     """Class for interacing Tango's grid and GENE's grid where at the outer boundary, GENE's grid
       extends radially outward farther than GENE's.  At the inner bounadry, Tango's grid extends
