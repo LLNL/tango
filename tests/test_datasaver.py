@@ -34,7 +34,7 @@ def test_FinalizeData():
     dataSaver.add_data(data, 2)
     
     assert dataSaver.dataAllIterations['H2'].shape == (maxIterations, numPts)
-    dataSaver._finalize_data()
+    dataSaver.finalize_data()
     assert dataSaver.dataAllIterations['H2'].shape == (2, numPts)
     assert len(dataSaver.iterationNumber) == 2
 
@@ -54,7 +54,7 @@ def test_SaveToFile():
     data = {'H2': H2, 'H3': H3}
     dataSaver.add_data(data, 1)
     dataSaver.add_data(data, 2)
-    
+    dataSaver.finalize_data()
     dataSaver.save_to_file('testsave')
     
     with np.load('testsave_timestep.npz') as npzfile:

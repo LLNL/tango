@@ -7,6 +7,8 @@ loop of iterating to solve a nonlinear equation.
 Convergence of the iteration loop is determined through comparing the rms residual of the nonlinear transport
 equation to a relative tolerance value tol.
 
+When all of the timesteps are successfully completed, solver.ok changes from True to False.
+
 Failure modes:
     --convergence tolerance not reached within the maximum number of iterations (maxIterations)
     --solution becomes unphysical (negative, infinite, or NaN vlaues)
@@ -39,7 +41,7 @@ class Solver(object):
         self.tol = tol                          # tolerance for iteration convergence (scalar)
         assert callable(compute_all_H), "compute_all_H must be callable (e.g., a function)"
         self.compute_all_H = compute_all_H
-        self.turbhandler = turbhandler
+        self.turbhandler = turbhandler          # why do I need turbhandler as input?  I only use it here to get_EWMA_params.  I don't like this; need better design.  What if there is no turbhandler?
         
         # initialize other instance data
         # DataSaverHandler and fileHandlerExecutor are two different ways of dealing with saving files on disk (and have different goals)
@@ -87,8 +89,11 @@ class Solver(object):
                         'EWMAParamTurbFlux':EWMAParamTurbFlux,  'EWMAParamProfile':EWMAParamProfile}
         self.dataSaverHandler.add_one_off_data(timestepData)
         self.dataSaverHandler.save_to_file(self.m)
-        self.dataSaverHandler.reset_for_next_timestep()
-        self.fileHandlerExecutor.reset_handlers_for_next_timestep()
+        
+        # Reset if another timestep is about to come.  If not, data is preserved for access at end.
+        if self.ok:
+            self.dataSaverHandler.reset_for_next_timestep()
+            self.fileHandlerExecutor.reset_handlers_for_next_timestep()
         ##### End of section for saving data ##### 
         
         self.profile_mminus1 = self.profile
@@ -106,7 +111,7 @@ class Solver(object):
         # compute new iterate of profile
         self.profile = HToMatrixFD.solve(A, B, C, f)
         
-        tango_logging.log("Timestep m={}: after iteration number l={}, first 4 entries of profile={};  last 4 entries={}".format(
+        tango_logging.debug("Timestep m={}: after iteration number l={}, first 4 entries of profile={};  last 4 entries={}".format(
             self.m, self.l, self.profile[:4], self.profile[-4:]))  # debug
         
         # save data if desired
@@ -184,7 +189,7 @@ class Solver(object):
         'x': data['x'], 'xTurbGrid': data['xTurbGrid'],
         'D': data['D'], 'c': data['c'],
         'profileTurbGrid': data['profileTurbGrid'], 'profileEWMATurbGrid': data['profileEWMATurbGrid'],
-        'fluxTurbGrid': data['fluxTurbGrid'], 'fluxEWMATurbGrid': data['fluxEWMATurbGrid'],
+        'fluxTurbGrid': data['fluxTurbGrid'], 'smoothedFluxTurbGrid': data['smoothedFluxTurbGrid'], 'fluxEWMATurbGrid': data['fluxEWMATurbGrid'],
         'DTurbGrid': data['DTurbGrid'], 'cTurbGrid': data['cTurbGrid'],
         'DHatTurbGrid': data['DHatTurbGrid'], 'cHatTurbGrid': data['cHatTurbGrid'], 'thetaTurbGrid': data['thetaTurbGrid']}
         """

@@ -17,10 +17,10 @@ class DataSaverHandler(object):
         self.parallelEnvironment = False
         self.MPIrank = None
         
-    def initialize_datasaver(self, basename, maxIterations, arraysToSave):
+    def initialize_datasaver(self, basename, maxIterations, arraysToSave, saveToDisk=True):
         """create a dataSaver and add to collection"""
         self.basename = basename
-        self.dataSaver = DataSaver(maxIterations, arraysToSave)
+        self.dataSaver = DataSaver(maxIterations, arraysToSave, saveToDisk=saveToDisk)
         #DataSaver = dataSaver(**kw)
         #self.datasavers.append(DataSaver)
         
@@ -34,6 +34,7 @@ class DataSaverHandler(object):
             
     def save_to_file(self, m):
         if self.dataSaver is not None and self.serial_or_rank0():
+            self.dataSaver.finalize_data()
             filename = self.basename + str(m)
             self.dataSaver.save_to_file(filename)
             
@@ -58,16 +59,17 @@ class DataSaverHandler(object):
     
 
 class DataSaver(object):
-    def __init__(self, maxIterations, arraysToSave):
+    def __init__(self, maxIterations, arraysToSave, saveToDisk=True):
         """
         Inputs:
           
           maxIterations         Max # of iterations allowed per timestep
           arraysToSave          list containing strings of data to save on each iteration -- acts as keys for a dict
+          saveToDisk            If False, will not save to disk, but will do everything else, allowing for interactive access (bool)
         """
         self.maxIterations = maxIterations
         self.arraysToSave = arraysToSave
-        
+        self.saveToDisk = saveToDisk
         
         # initialize data storage
         self.oneOffData = {}
@@ -102,7 +104,7 @@ class DataSaver(object):
         else:
             print("Object is in finalized state.  Cannot add data.")
         
-    def _finalize_data(self):
+    def finalize_data(self):
         """Perform final operations before writing the file.
         E.g., remove unused elements of the data (preallocated memory)
         """
@@ -132,8 +134,7 @@ class DataSaver(object):
           The second file (ending in _iterations) is for the 1D data that changes each iteration
           (e.g., H2, profile)
         """
-        if self.finalized == False:
-            self._finalize_data()
+        if self.saveToDisk and self.finalized:
             # save data whole-timestep data
             filenameTimestep = filename + "_timestep"
             self.oneOffData['iterationNumber'] = self.iterationNumber
@@ -151,7 +152,7 @@ class DataSaver(object):
             else:
                 tango_logging.log("Not saving any iterations data for this timestep.")  # info
         else:
-            tango_logging.log("Object is in finalized state.  Cannot save.")
+            tango_logging.log("Object is not in finalized state.  Cannot save.")
         
     def reset_for_next_timestep(self):
         """Reset all of the data to zeros and the counter so that the object is fresh for the next
