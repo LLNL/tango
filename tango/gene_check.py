@@ -7,8 +7,8 @@ Purposes:
      coupling on the NERSC machines, we do not have MPI-awareness within the Python code.  Yet when the Python
      code is initialized in a parallel job, each processor runs independently runs the code.  In order to ensure
      that some actions, in particular writing to file, are handled by only a single process, GENE returns an
-     integer that effectively functions as an MPI  rank.  The Python code can then ensure that only actions occur
-     on the process with rank==0.
+     integer that effectively functions as an MPI  rank.  The Python code can then ensure that some actions only
+     occur on the process with rank==0.
 
 See https://github.com/LLNL/tango for copyright and license information
 """

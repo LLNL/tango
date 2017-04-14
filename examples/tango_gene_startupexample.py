@@ -90,14 +90,16 @@ def problem_setup():
     temperatureIC = temperatureIC_inkeV * 1000 * e  # in SI units
     pressureIC = temperature_to_pressure(temperatureIC, densityProfile)
     
+    safetyFactorGene = 0.868 + 2.2 * (psiGene/minorRadius)**2
+    
     # GENE setup
     fromCheckpoint = False    # true if restarting a simulation from an already-saved checkpoint
-    #(geneFluxModel, MPIrank) = tango.gene_startup.setup_gene_run(psiTango, psiGene, minorRadius, majorRadius, B0, ionMass, ionCharge, densityProfile, pressureIC, Bref, Lref, grids, fromCheckpoint)
+    #(geneFluxModel, MPIrank) = tango.gene_startup.setup_gene_run(psiTango, psiGene, minorRadius, majorRadius, B0, ionMass, ionCharge, densityProfile, pressureIC, safetyFactorGene, Bref, Lref, grids, fromCheckpoint)
     
          # use this version to test, if in an environment without GENE
     pseudoGene = True
-    (geneFluxModel, MPIrank) = tango.gene_startup.setup_gene_run(psiTango, psiGene, minorRadius, majorRadius, B0, ionMass, ionCharge, densityProfile, pressureIC, Bref, Lref, Tref, nref, gridMapper, fromCheckpoint, pseudoGene)
-    # (geneFluxModel, MPIrank) = tango.gene_startup.pseudo_setup_gene_run(psiTango, psiGene, minorRadius, majorRadius, B0, ionMass, ionCharge, densityProfile, pressureIC, Bref, Lref, grids, fromCheckpoint)
+    (geneFluxModel, MPIrank) = tango.gene_startup.setup_gene_run(psiTango, psiGene, minorRadius, majorRadius, B0, ionMass, ionCharge, densityProfile, pressureIC, safetyFactorGene, Bref, Lref, Tref, nref, gridMapper, fromCheckpoint, pseudoGene)
+    # (geneFluxModel, MPIrank) = tango.gene_startup.pseudo_setup_gene_run(psiTango, psiGene, minorRadius, majorRadius, B0, ionMass, ionCharge, densityProfile, pressureIC, safetyFactorGene, Bref, Lref, grids, fromCheckpoint)
     
     
     # other transport physics / physicsToH object creation
@@ -109,7 +111,7 @@ def problem_setup():
     
     # creation of turbulence handler
     dpsi = psiTango[1] - psiTango[0]    
-    turbhandler = tango.lodestro_method.TurbulenceHandler(dpsi, psiTango, lmParams, geneFluxModel, grids, Vprime)
+    turbhandler = tango.lodestro_method.TurbulenceHandler(dpsi, psiTango, lmParams, geneFluxModel, gridMapper, Vprime)
     
     # specify a source function?
     

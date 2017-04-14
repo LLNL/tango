@@ -53,7 +53,7 @@ class GeneComm(object):
         self.Lref = Lref
         self.Tref = Tref
         self.nref = nref
-        self.mref = 1       # measured in proton masses
+        self.mref = ionMass       # measured in proton masses
         self.B0 = B0
         self.minorRadius = minorRadius
         self.majorRadius = majorRadius
@@ -61,7 +61,7 @@ class GeneComm(object):
         self.psiTangoGrid = psiTangoGrid  # psi = r
         self.psiGeneGrid = psiGeneGrid # psi = x = r
         self.densityTangoGrid = densityTangoGrid
-        self.ionMass = ionMass # measured in mref (proton masses)
+        self.ionMass = ionMass # measured in (proton masses)
         self.ionCharge = ionCharge # measured in electron charge
         self.simulationTime = None  # measured in Lref/cref
         
@@ -124,7 +124,7 @@ class GeneComm(object):
         """Instantiate an object that provides an interface to GENE.
         
         genecomm_lowlevel.GeneInterface expects quantities to be given in GENE normalized units.  Additionally, quantities must exist
-        on GENE's radial grid, psi_gene.
+        on GENE's radial grid, psiGene.
         
         Outputs:
           geneInterface     Instance of genecomm_lowlevel.GeneInterface, enables running GENE

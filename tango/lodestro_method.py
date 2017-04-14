@@ -35,9 +35,9 @@ class TurbulenceHandler(object):
     Since the class provides the H coefficients, and not simply diffusion coefficients, it must
     be aware of the coordinate geometric factor V' = dV/dpsi.
     """
-    def __init__(self, dxTurbGrid, x, lmParams, fluxModel, gridMapper=None, Vprime=None, fluxSmoother=None):
+    def __init__(self, dxTurbGrid, x, lmParams, fluxModel, gridMapper=None, VprimeTango=None, fluxSmoother=None):
         """A geometric factor Vprime may be optionally provided to the constructor.  This 
-            geometric factor is essentially a Jacoabian and appears in transport equations
+            geometric factor is essentially a Jacobian and appears in transport equations
             in non-Cartesian geometry.  It typically appears in the form
                         dn/dt = 1/V' * d/dpsi(V' Gamma) + ...  
             For example, in polar coordinates where r is the flux label, V' is proportional
@@ -47,7 +47,7 @@ class TurbulenceHandler(object):
             flux function; any flux label is valid.
             
             Inputs:
-              dx          grid spacing for independent variable x [sometimes referred to in
+              dxTurbGrid  grid spacing for independent variable x on the turbulence grid[sometimes referred to in
                             the documentation as psi] (scalar)
               x           independent variable x on the transport grid
               lmParams    parameters to be used by the lodestro method (dict)
@@ -59,7 +59,7 @@ class TurbulenceHandler(object):
                             between the transport grid and the grid used to compute turbulent fluxes
                             See interfacegrids_gene.py
                                 default: None [same grid for transport and turbulence]
-              Vprime      (optional) geometric coefficients dV/dpsi depending on coordinate system (array)
+              VprimeTango (optional) geometric coefficients dV/dpsi depending on coordinate system, on the transport grid (array)
                                 default: None [V'=1 everywhere]
         """
         self.dxTurbGrid = dxTurbGrid
@@ -76,8 +76,8 @@ class TurbulenceHandler(object):
         else:
             self.gridMapper = GridsNull(x)
         
-        if Vprime is not None:
-            self.Vprime = Vprime
+        if VprimeTango is not None:
+            self.VprimeTango = VprimeTango
             self.isNonCartesian = True
         else:
             self.isNonCartesian = False
@@ -170,8 +170,8 @@ class TurbulenceHandler(object):
         #     H2contrib = physics_to_H.GeometrizedDiffusionCoeffToH(D, Vprime)
         #     H3contrib = physics_to_H.GeometrizedConvectionCoeffToH(c, Vprime):
         if self.isNonCartesian == True:
-            H2contrib = self.Vprime * D
-            H3contrib = -self.Vprime * c
+            H2contrib = self.VprimeTango * D
+            H3contrib = -self.VprimeTango * c
         elif self.isNonCartesian == False:
             H2contrib = D
             H3contrib = -c
@@ -364,20 +364,21 @@ class FluxSplit(object):
             if DHat >= Dmin AND dp/dx is small, use the Shestakov formula
             otherwise, set theta = 1 (all diffusive)
             
-        What to use for Dmin, Dmax, and dpdx_thresh will depend on the problem.  The numerical values will further depend on what
+        What to use for Dmin, Dmax, and dpdxThreshold will depend on the problem.  The numerical values will further depend on what
           units are used to represent the dependent and independent variables.
         """
         Dmin = thetaParams['Dmin']  # scalar
         Dmax = thetaParams['Dmax']  # scalar
         dpdxThreshold = thetaParams['dpdxThreshold'] # scalar
+        theta = np.ones_like(DHat)
         
         ind1 = DHat < Dmin
-        ind2 = (abs(dpdx) < dpdxThreshold) & (DHat >= Dmin) & (DHat <= Dmax)
-        ind3 = (abs(dpdx) < dpdxThreshold) & (DHat > Dmax)
-        
-        theta = np.ones_like(DHat)
         theta[ind1] = 0
+        
+        ind2 = (abs(dpdx) < dpdxThreshold) & (DHat >= Dmin) & (DHat <= Dmax)
         theta[ind2] = (Dmax - DHat[ind2]) / (Dmax - Dmin)
+        
+        ind3 = (abs(dpdx) < dpdxThreshold) & (DHat > Dmax)
         theta[ind3] = 0
         
         assert np.count_nonzero((theta >= 0) & (theta <= 1)) == np.size(theta), 'some theta is not between 0 and 1'

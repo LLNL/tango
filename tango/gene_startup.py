@@ -10,7 +10,6 @@ from __future__ import division
 import numpy as np
 from . import gene_check
 from . import genecomm
-from . import parameters
 
 # Possible change in the future:  We could get an MPIrank solely within Python using mpi4py, using the  following code.  This would prevent us
 # from having to run # GENE simply to get an MPIrank.  However, the problem with this is that on login nodes on NERSC, where MPI is not
@@ -24,8 +23,8 @@ from . import parameters
 
 
     
-def setup_gene_run(psiTango, psiGene, minorRadius, majorRadius, B0, ionMass, ionCharge, densityTangoGrid, pressureTangoGrid, Bref, Lref, Tref, nref,
-                   gridMapper, fromCheckpoint=True, pseudoGene=False):
+def setup_gene_run(psiTango, psiGene, minorRadius, majorRadius, B0, ionMass, ionCharge, densityTangoGrid, pressureTangoGrid, safetyFactorGeneGrid,
+                   Bref, Lref, Tref, nref, gridMapper, fromCheckpoint=True, pseudoGene=False):
     """Do all the necessary setup for a tango run using GENE
     
     This function works with either a clean run from no checkpoint, or starting from an initial condition.
@@ -40,6 +39,7 @@ def setup_gene_run(psiTango, psiGene, minorRadius, majorRadius, B0, ionMass, ion
       ionCharge             ion charge, measured in electron charge (scalar)
       densityTangoGrid      density profile on Tango radial grid in m^-3 (array)
       pressureTangoGrid     ion pressure profile (initial condition) on Tango radial grid in J/m^3 (array)
+      safetyFactorGeneGrid  safety factor q on GENE radial grid (array)
       Bref                  GENE reference magnetic field in Tesla (scalar)
       Lref                  GENE reference length in m (scalar)
       Tref                  GENE reference temperature in kev (scalar)
@@ -50,15 +50,15 @@ def setup_gene_run(psiTango, psiGene, minorRadius, majorRadius, B0, ionMass, ion
     Outputs:
       geneFluxModel         interface to GENE, with a get_flux method (GeneComm object)
       MPIrank               MPI rank obtained from GENE for distinguishing processors (integer)
+      
+    Other notes:
+      B0 is currently unused.  Bref sets the magnetic field strength
     """
     # check that GENE works and get MPI rank
     if pseudoGene==False:
         (status, MPIrank) = gene_check.gene_check()
     else:
         (status, MPIrank) = (0, 0)
-    
-    # compute safety Factor on GENE grid
-    safetyFactorGeneGrid = parameters.analytic_safety_factor(psiGene, minorRadius, majorRadius)
     
     # if doing a clean run from no checkpoint, create the initial checkpoint...
     if pseudoGene==False:
