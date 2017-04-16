@@ -7,7 +7,7 @@ import tango
 import tango.gene_startup
 import tango.smoother
 import tango.genecomm_unitconversion
-import tango.logging
+import tango.tango_logging as tlog
 from tango.extras import util # for duration_as_hms
 
 def initialize_iteration_parameters():
@@ -236,7 +236,7 @@ def problem_setup():
 # ************************************************** #
 
 (MPIrank, L, rTango, pressureRightBC, pressureICTango, maxIterations, tol, geneFluxModel, turbhandler, compute_all_H, t_array) = problem_setup()
-
+tlog.setup(True, MPIrank, tlog.DEBUG)
 
 
 # set up FileHandlers
@@ -262,25 +262,24 @@ arraysToSave = ['H2', 'H3', 'profile',
                 'profileEWMATurbGrid',
                 'fluxTurbGrid', 'fluxEWMATurbGrid',
                 'DHatTurbGrid', 'cHatTurbGrid', 'thetaTurbGrid']  # for list of possible arrays, see solver._pkgdata()
-databasename = 'datasaver'
-solver.dataSaverHandler.initialize_datasaver(databasename, maxIterations, arraysToSave)
+dataBasename = 'datasaver'
+tlog.info("Preparing DataSaver to save files with prefix {}.".format(dataBasename))
+solver.dataSaverHandler.initialize_datasaver(dataBasename, maxIterations, arraysToSave)
 solver.dataSaverHandler.set_parallel_environment(parallelEnvironment, MPIrank)
 
-# logging ??
+
+tlog.info("Entering main time loop...")
 while solver.ok:
-     Implicit time advance: iterate to solve the nonlinear equation!
+     # Implicit time advance: iterate to solve the nonlinear equation!
      solver.TakeTimestep()
     
-#print("Using pseudo-GENE, python-GENE interface code initialized OK!")
-
-
 
 if solver.reached_end == True:
-    if MPIrank==0:
-        print("The solution has been reached successfully.")
-        print("Took {} iterations".format(solver.l))
+    tlog.info("The solution has been reached successfully.")
+    tlog.info("Took {} iterations".format(solver.l))
 else:
-    if MPIrank==0:
-        print("The solver failed for some reason.")
-        
-# other logging??
+    tlog.info("The solver failed for some reason.")
+    tlog.info("The residual at the end is {}".format(solver.errHistoryFinal[-1]))
+    
+tlog.info("The profile at the end is:")
+tlog.info("{}".format(solver.profile))
