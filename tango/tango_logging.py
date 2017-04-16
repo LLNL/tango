@@ -81,7 +81,7 @@ def log(message, level=INFO):
     Only log if:
         1) logger is initialized
         2) this is the correct process to perform logging
-        3) level > currently set threshold 
+        3) level >= currently set threshold 
     """
     if initialized and serial_or_rank0() and level >= threshold:
         _log(message, level)
