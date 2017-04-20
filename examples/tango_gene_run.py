@@ -8,7 +8,8 @@ import tango.gene_startup
 import tango.smoother
 import tango.genecomm_unitconversion
 import tango.tango_logging as tlog
-from tango.extras import util # for duration_as_hms
+import tango.utilities.util as util # for duration_as_hms
+import gene_tango
 
 def initialize_iteration_parameters():
     maxIterations = 3
@@ -201,7 +202,7 @@ def problem_setup():
     
     # GENE setup
     fromCheckpoint = True    # true if restarting a simulation from an already-saved checkpoint
-    (geneFluxModel, MPIrank) = tango.gene_startup.setup_gene_run(rTango, rGene, minorRadius, majorRadius, B0, ionMass, ionCharge, densityProfileTango, pressureICTango, safetyFactorGeneGrid,
+    geneFluxModel = tango.gene_startup.setup_gene_run(rTango, rGene, minorRadius, majorRadius, B0, ionMass, ionCharge, densityProfileTango, pressureICTango, safetyFactorGeneGrid,
                                                                  Bref, Lref, Tref, nref, gridMapper, fromCheckpoint)
     
     
@@ -228,24 +229,28 @@ def problem_setup():
     # initialize the compute all H object
     compute_all_H = ComputeAllH(turbhandler, VprimeTango, minorRadius, majorRadius, A)
     t_array = np.array([0, 1e4])  # specify the timesteps to be used.
-    return (MPIrank, L, rTango, pressureRightBC, pressureICTango, maxIterations, tol, geneFluxModel, turbhandler, compute_all_H, t_array)
+    return (L, rTango, pressureRightBC, pressureICTango, maxIterations, tol, geneFluxModel, turbhandler, compute_all_H, t_array)
 
     
 # ************************************************** #
 ####              START OF MAIN PROGRAM           ####
 # ************************************************** #
-
-(MPIrank, L, rTango, pressureRightBC, pressureICTango, maxIterations, tol, geneFluxModel, turbhandler, compute_all_H, t_array) = problem_setup()
+MPIrank = gene_tango.init_mpi()
 tlog.setup(True, MPIrank, tlog.DEBUG)
+(L, rTango, pressureRightBC, pressureICTango, maxIterations, tol, geneFluxModel, turbhandler, compute_all_H, t_array) = problem_setup()
+
 
 
 # set up FileHandlers
-f1HistoryHandler = tango.handlers.Savef1HistoryHandler(iterationInterval=1, basename='f1_iteration_history', genefile='checkpoint_000')
+diagdir = '/scratch2/scratchdirs/jbparker/genedata/prob21/'
+f1HistoryHandler = tango.handlers.Savef1HistoryHandler(iterationInterval=1,
+                    basename = (diagdir + 'f1_iteration_history'), 
+                    genefile = (diagdir + 'checkpoint_000'))
 tangoCheckpointHandler = tango.handlers.TangoCheckpointHandler(iterationInterval=1, basename='tango_checkpoint')
 tangoHistoryHandler = tango.handlers.TangoHistoryHandler(iterationInterval=1, basename='tango_history', maxIterations=maxIterations)
 
 # specify how long GENE runs between Tango iterations.  Specified in Lref/cref
-geneFluxModel.set_simulation_time(50)
+geneFluxModel.set_simulation_time(0.9)
 
 solver = tango.solver.Solver(L, rTango, pressureICTango, pressureRightBC, t_array, maxIterations, tol, compute_all_H, turbhandler)
 
@@ -257,7 +262,8 @@ solver.fileHandlerExecutor.add_handler(tangoCheckpointHandler)
 solver.fileHandlerExecutor.add_handler(tangoHistoryHandler)
 
 # create parameters for dataSaverHandler
-arraysToSave = ['H2', 'H3', 'profile', 
+arraysToSave = ['xTurbGrid',
+                'H2', 'H3', 'profile', 
                 'D', 'c', 
                 'profileEWMATurbGrid',
                 'fluxTurbGrid', 'fluxEWMATurbGrid',
@@ -271,10 +277,10 @@ solver.dataSaverHandler.set_parallel_environment(parallelEnvironment, MPIrank)
 tlog.info("Entering main time loop...")
 while solver.ok:
      # Implicit time advance: iterate to solve the nonlinear equation!
-     solver.TakeTimestep()
+     solver.take_timestep()
     
 
-if solver.reached_end == True:
+if solver.reachedEnd == True:
     tlog.info("The solution has been reached successfully.")
     tlog.info("Took {} iterations".format(solver.l))
 else:
@@ -283,3 +289,7 @@ else:
     
 tlog.info("The profile at the end is:")
 tlog.info("{}".format(solver.profile))
+
+gene_tango.finalize_mpi()
+
+

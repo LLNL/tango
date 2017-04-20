@@ -148,10 +148,10 @@ def call_gene_low_level(simulationTime=None, rho=None, temperatureHat=None, dens
     # convert from Fortran-contiguous to C-contiguous arrays for rest of Python code
     dVdxHat = np.ascontiguousarray(dVdxHat)
     sqrt_gxx = np.ascontiguousarray(sqrt_gxx)
-    avgParticleFluxHat = np.ascontiguousarray(avgParticleFluxHat)
-    avgHeatFluxHat = np.ascontiguousarray(avgHeatFluxHat)
-    temperatureOutput = np.ascontiguousarray(temperatureOutput)
-    densityOutput = np.ascontiguousarray(densityOutput)
+    avgParticleFluxHat = np.ascontiguousarray(avgParticleFluxHat).squeeze() # squeeze to remove singleton dimension due to ionSpeciesCount==1
+    avgHeatFluxHat = np.ascontiguousarray(avgHeatFluxHat).squeeze()
+    temperatureOutput = np.ascontiguousarray(temperatureOutput).squeeze()
+    densityOutput = np.ascontiguousarray(densityOutput).squeeze()
     
     return (MPIrank, dVdxHat, sqrt_gxx, avgParticleFluxHat, avgHeatFluxHat, temperatureOutput, densityOutput)
     

@@ -8,7 +8,7 @@ See https://github.com/LLNL/tango for copyright and license information
 
 from __future__ import division
 import numpy as np
-from . import gene_check
+#from . import gene_check
 from . import genecomm
 
 # Possible change in the future:  We could get an MPIrank solely within Python using mpi4py, using the  following code.  This would prevent us
@@ -55,10 +55,16 @@ def setup_gene_run(psiTango, psiGene, minorRadius, majorRadius, B0, ionMass, ion
       B0 is currently unused.  Bref sets the magnetic field strength
     """
     # check that GENE works and get MPI rank
-    if pseudoGene==False:
-        (status, MPIrank) = gene_check.gene_check()
-    else:
-        (status, MPIrank) = (0, 0)
+    #if pseudoGene==False:
+    #    (status, MPIrank) = gene_check.gene_check()
+    #    import time
+	#if MPIrank==0:
+	#    print('rank 0 here.  first gene_check finished.  Trying the second gene_check now...')
+	#sys.stdout.flush()
+    #    time.sleep(0.2) # pause to allow processes to catch up
+	#(status, MPIrank2) = gene_check.gene_check()
+    #else:
+    #    (status, MPIrank) = (0, 0)
     
     # if doing a clean run from no checkpoint, create the initial checkpoint...
     if pseudoGene==False:
@@ -77,7 +83,7 @@ def setup_gene_run(psiTango, psiGene, minorRadius, majorRadius, B0, ionMass, ion
     # set the simulation time per GENE call
     simulationTime = 10 # measured in Lref/cref
     geneFluxModel.set_simulation_time(simulationTime)
-    return (geneFluxModel, MPIrank)
+    return geneFluxModel
     
 
 def initial_gene_run(geneFluxModel, pressureGeneGrid, simulationTime):
