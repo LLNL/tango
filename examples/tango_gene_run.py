@@ -248,12 +248,14 @@ MPIrank = gene_tango.init_mpi()
 tlog.setup(True, MPIrank, tlog.DEBUG)
 (L, rTango, pressureRightBC, pressureICTango, maxIterations, tol, geneFluxModel, turbhandler, compute_all_H, t_array) = problem_setup()
 
-
+# seed the EWMA for the turbulent heat flux
+heatFluxSeed = read_seed_turb_flux()
+turbhandler.seed_EWMA_turb_flux(heatFluxSeed)
 
 # set up FileHandlers
 #  GENE output to save periodically.  For list of available, see handlers.py
-diagdir = '/scratch2/scratchdirs/jbparker/genedata/prob21/'
-f1HistoryHandler = tango.handlers.SaveGeneOutputHandler('checkpoint_000', iterationInterval=10, diagdir=diagdir)
+diagdir = '/scratch2/scratchdirs/jbparker/genedata/prob22/'
+f1HistoryHandler = tango.handlers.SaveGeneOutputHandler('checkpoint_000', iterationInterval=2, diagdir=diagdir)
 
 geneFilesToSave = [name + '_000' for name in ['field', 'mom_ions', 'nrg', 'profile_ions', 'profiles_ions', 'srcmom_ions', 'vsp']]
 geneOutputHandler = tango.handlers.SaveGeneOutputHandler(*geneFilesToSave, iterationInterval=1, diagdir=diagdir)
