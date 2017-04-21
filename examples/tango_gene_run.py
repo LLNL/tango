@@ -282,7 +282,7 @@ arraysToSave = ['xTurbGrid',
                 'H2', 'H3', 'profile', 
                 'D', 'c', 
                 'profileEWMATurbGrid',
-                'fluxTurbGrid', 'fluxEWMATurbGrid',
+                'fluxTurbGrid', 'smoothedFluxTurbGrid', 'fluxEWMATurbGrid',
                 'DHatTurbGrid', 'cHatTurbGrid', 'thetaTurbGrid']  # for list of possible arrays, see solver._pkgdata()
 dataBasename = 'datasaver'
 tlog.info("Preparing DataSaver to save files with prefix {}.".format(dataBasename))
