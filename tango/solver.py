@@ -20,10 +20,12 @@ See https://github.com/LLNL/tango for copyright and license information"""
 
 from __future__ import division, absolute_import
 import numpy as np
+import time
 from . import tango_logging
 from . import HToMatrixFD
 from . import datasaver
 from . import handlers
+from .utilities import util
 
 
 
@@ -99,6 +101,8 @@ class Solver(object):
         self.profile_mminus1 = self.profile
 
     def compute_next_iteration(self):
+        startTime = time.time()
+        
         # compute H's from current iterate of profile
         (H1, H2, H3, H4, H6, H7, extraturbdata) = self.compute_all_H(self.t, self.x, self.profile)
         
@@ -111,6 +115,10 @@ class Solver(object):
         # compute new iterate of profile
         self.profile = HToMatrixFD.solve(A, B, C, f)
         
+        # some output information
+        endTime = time.time()
+        durationHMS = util.duration_as_hms(endTime - startTime)
+        tango_logging.debug("...iteration {} took a wall time of {}".format(self.l, durationHMS))
         tango_logging.debug("Timestep m={}: after iteration number l={}, first 4 entries of profile={};  last 4 entries={}".format(
             self.m, self.l, self.profile[:4], self.profile[-4:]))  # debug
         

@@ -1,6 +1,6 @@
 from __future__ import division, absolute_import
 import numpy as np
-
+import time
 
 # Tango imports... should simplify these so I'm not importing them all separately!
 import tango
@@ -8,7 +8,7 @@ import tango.gene_startup
 import tango.smoother
 import tango.genecomm_unitconversion
 import tango.tango_logging as tlog
-import tango.utilities.util as util # for duration_as_hms
+import tango.utilities.util # for duration_as_hms
 import gene_tango
 
 def initialize_iteration_parameters():
@@ -93,6 +93,15 @@ def add_one_if_even(n):
         return n
     else:
         raise ValueError('n does not appear to be an integer.')
+        
+def read_seed_turb_flux():
+    """Read in a file that contains a turbulent heat flux profile to use as the EWMA seed.
+    
+    The seed should probably come from a long run of GENE (long compared to a single iteration here) so
+    that the heat flux is averaged over many cycles.  Heat flux here is qhat, not V' qhat."""
+    filenameHeatFluxSeed = 'heat_flux_seed'
+    heatFluxProfile = np.loadtxt(filenameHeatFluxSeed, unpack=True)
+    return heatFluxProfile
     
 class ComputeAllH(object):
     def __init__(self, turbhandler, Vprime, minorRadius, majorRadius, A):
@@ -242,14 +251,18 @@ tlog.setup(True, MPIrank, tlog.DEBUG)
 
 
 # set up FileHandlers
+#  GENE output to save periodically.  For list of available, see handlers.py
 diagdir = '/scratch2/scratchdirs/jbparker/genedata/prob21/'
-f1HistoryHandler = tango.handlers.Savef1HistoryHandler(iterationInterval=1,
-                    basename = (diagdir + 'f1_iteration_history'), 
-                    genefile = (diagdir + 'checkpoint_000'))
+f1HistoryHandler = tango.handlers.SaveGeneOutputHandler('checkpoint_000', iterationInterval=10, diagdir=diagdir)
+
+geneFilesToSave = [name + '_000' for name in ['field', 'mom_ions', 'nrg', 'profile_ions', 'profiles_ions', 'srcmom_ions', 'vsp']]
+geneOutputHandler = tango.handlers.SaveGeneOutputHandler(*geneFilesToSave, iterationInterval=1, diagdir=diagdir)
+
+#  Tango handlers
 tangoCheckpointHandler = tango.handlers.TangoCheckpointHandler(iterationInterval=1, basename='tango_checkpoint')
 tangoHistoryHandler = tango.handlers.TangoHistoryHandler(iterationInterval=1, basename='tango_history', maxIterations=maxIterations)
 
-# specify how long GENE runs between Tango iterations.  Specified in Lref/cref
+#  specify how long GENE runs between Tango iterations.  Specified in Lref/cref
 geneFluxModel.set_simulation_time(0.9)
 
 solver = tango.solver.Solver(L, rTango, pressureICTango, pressureRightBC, t_array, maxIterations, tol, compute_all_H, turbhandler)
@@ -258,6 +271,7 @@ solver = tango.solver.Solver(L, rTango, pressureICTango, pressureRightBC, t_arra
 parallelEnvironment = True
 solver.fileHandlerExecutor.set_parallel_environment(parallelEnvironment, MPIrank)
 solver.fileHandlerExecutor.add_handler(f1HistoryHandler)
+solver.fileHandlerExecutor.add_handler(geneOutputHandler)
 solver.fileHandlerExecutor.add_handler(tangoCheckpointHandler)
 solver.fileHandlerExecutor.add_handler(tangoHistoryHandler)
 
@@ -275,10 +289,11 @@ solver.dataSaverHandler.set_parallel_environment(parallelEnvironment, MPIrank)
 
 
 tlog.info("Entering main time loop...")
+
+startTime = time.time()
 while solver.ok:
      # Implicit time advance: iterate to solve the nonlinear equation!
      solver.take_timestep()
-    
 
 if solver.reachedEnd == True:
     tlog.info("The solution has been reached successfully.")
@@ -290,6 +305,8 @@ else:
 tlog.info("The profile at the end is:")
 tlog.info("{}".format(solver.profile))
 
+endTime = time.time()
+durationHMS = tango.utilities.util.duration_as_hms(endTime - startTime)
+tlog.info("Total wall-time spent for Tango run: {}".format(durationHMS))
+
 gene_tango.finalize_mpi()
-
-

@@ -151,13 +151,30 @@ class TurbulenceHandler(object):
         """
         (EWMAParamTurbFlux, EWMAParamProfile) = self.lodestroMethod.get_ewma_params()
         return (EWMAParamTurbFlux, EWMAParamProfile)
+    
+    def restore_ewma_from_checkpoint(self, profileEWMA, turbFluxEWMA):
+        """Restore the EWMA iterates for both profile and turbulent flux from a checkpoint.
         
-    def set_ewma_iterates(self, profileEWMA, turbFluxEWMA):
-        """See lm.set_ewma_iterates() for details.
-        
-        Useful for restoring Tango from a checkpoint.
+        Needed to fully restore Tango from a checkpoint.
+        Inputs:
+          profileEWMA       input profile EWMA (1D array)
+          turbFluxEWMA      input turbulent flux EWMA (1D array)
         """
         self.lodestroMethod.set_ewma_iterates(profileEWMA, turbFluxEWMA)
+        
+    def seed_EWMA_turb_flux(self, turbFluxEWMA):
+        """Seed the EWMA iterate for the turbulent flux by providing a specified value.
+        
+        If the turbulent flux is not seeded, then by default the value in the first iteration itself is used as the seed value. This can
+        lead to erratic behavior in the first few iterations because the turbulent flux in the first iteration is not necessarily "good"
+        if it is not averaged over a long time.  If a longer run (say, to set the initial point) has been completed, then the averaged
+        flux from that run is likely to be a better seed for the EWMA iterate.  While this seeding is not necessary, it may
+        converge faster, and should probably be used.
+        
+        Inputs:
+          turbFluxEWMA      input data (1D array)
+        """
+        self.lodestroMethod.set_ewma_turb_flux(turbFluxEWMA)
         
     def Dc_to_Hcontrib(self, D, c):
         """Transform the effective diffusion coefficient D and effective convective velocity c
@@ -253,7 +270,15 @@ class lm(object):
           profileEWMA   New EWMA iterate for the profile (array)
           turbFluxEWMA  New EWMA iterate for the turbulent flux (array)
         """
+        self.set_ewma_profiles(profileEWMA)
+        self.set_ewma_turb_flux(turbFluxEWMA)
+    
+    def set_ewma_profiles(self, profileEWMA):
+        """Set the EWMA iterate for the profile"""
         self._EWMAProfile.set_ewma_iterate(profileEWMA)
+    
+    def set_ewma_turb_flux(self, turbFluxEWMA):
+        """Set the EWMA iterate for the turbulent flux"""
         self._EWMATurbFlux.set_ewma_iterate(turbFluxEWMA)
     
         

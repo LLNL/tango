@@ -69,10 +69,9 @@ def test_genestartup():
     pressureTangoGrid = temperatureTangoGrid * densityTangoGrid
     
     pseudoGene = True
-    (geneFluxModel, MPIrank) = tango.gene_startup.setup_gene_run(psiTango, psiGene, minorRadius, majorRadius, B0, ionMass, ionCharge, densityTangoGrid, pressureTangoGrid, safetyFactor, 
+    geneFluxModel = tango.gene_startup.setup_gene_run(psiTango, psiGene, minorRadius, majorRadius, B0, ionMass, ionCharge, densityTangoGrid, pressureTangoGrid, safetyFactor, 
                                                                  Bref, Lref, Tref, nref, gridMapper, fromCheckpoint=True, pseudoGene=pseudoGene)
     
-    assert MPIrank is not None
     assert hasattr(geneFluxModel, 'get_flux')
     
 
