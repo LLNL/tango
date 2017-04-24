@@ -24,6 +24,34 @@ def initialize_iteration_parameters():
     tol = 1e-11  # tol for convergence... reached when a certain error < tol
     return (maxIterations, lmParams, tol)
 
+def density_profile(rho):
+    """density profile, fixed in time.
+    Inputs:
+      rho       normalized radial coordinate rho=r/a (array)
+    Outputs:
+      T         density profile in SI (array)
+    """
+    minorRadius = 0.594  # a
+    majorRadius = 1.65  # R0
+    inverseAspectRatio = minorRadius / majorRadius
+    rho0 = 0.5
+    
+    # density profile
+    n0 = 3.3e19;     # in SI, m^-3
+    kappa_n = 2.2;  # R0 / Ln
+    #n = n0 * np.exp( -kappa_n * inverseAspectRatio * (xOvera - rho0));
+    
+    deltar = 0.5
+    rhominus = rho - rho0 + deltar/2
+    deltan = 0.1
+    n = n0 * np.exp( -kappa_n * inverseAspectRatio * (rho - rho0 - deltan * (np.tanh(rhominus/deltan) - np.tanh(deltar/2/deltan))))
+    
+    # set n to a constant for rho < rho0-deltar/2
+    ind = int(np.abs(rho - (rho0 - deltar/2)).argmin())
+    ind2 = (rho < (rho0-deltar/2))
+    n[ind2] = n[ind];
+    return n
+    
 def temperature_initial_condition(rho):
     """Initial temperature profile
     Inputs:
@@ -182,11 +210,13 @@ def problem_setup():
     #mref = 2  # do I need mref??
     
     
-    rho0 = 0.5
-    kappa_n = 2.22;
-    invasp = minorRadius / majorRadius
-    densityProfileGene = 3.3e19 * np.exp(-kappa_n * invasp * (rhoGene - rho0))
-    densityProfileTango = 3.3e19 * np.exp(-kappa_n * invasp * (rhoTango - rho0))
+    #rho0 = 0.5
+    #kappa_n = 2.22;
+    #invasp = minorRadius / majorRadius
+    #densityProfileGene = density_profile(rhoGene)
+    densityProfileTango = density_profile(rhoTango)
+    #densityProfileGene = 3.3e19 * np.exp(-kappa_n * invasp * (rhoGene - rho0))
+    #densityProfileTango = 3.3e19 * np.exp(-kappa_n * invasp * (rhoTango - rho0))
     
     # create object for interfacing tango and GENE radial grids
        # must be consistent with whether Tango's or Gene's radial domain extends farther radially outward
