@@ -1,3 +1,23 @@
+"""
+Checklist for a Gene-Tango run:
+GENE parameters file
+    diagdir
+    read checkpoint
+    parallelization / number of processors
+
+submit.cmd file
+    time limit
+    number of processors
+
+Tango python file
+    maximum number of iterations
+    EWMA parameters
+    diagdir
+    GENE simulation time per iteration
+    density profile
+    etc.   
+"""
+
 from __future__ import division, absolute_import
 import numpy as np
 import time
@@ -11,8 +31,13 @@ import tango.tango_logging as tlog
 import tango.utilities.util # for duration_as_hms
 import gene_tango
 
+# constants
+MAXITERS = 50
+DIAGDIR = '/scratch2/scratchdirs/jbparker/genedata/prob##/'
+SIMTIME = 50 # GENE simulation time per iteration, in Lref/cref
+
 def initialize_iteration_parameters():
-    maxIterations = 3
+    maxIterations = MAXITERS
     thetaParams = {'Dmin': 1e-5,
                    'Dmax': 1e3,
                    'dpdxThreshold': 400000}
@@ -38,7 +63,7 @@ def density_profile(rho):
     
     # density profile
     n0 = 3.3e19;     # in SI, m^-3
-    kappa_n = 2.2;  # R0 / Ln
+    kappa_n = 2.22;  # R0 / Ln
     #n = n0 * np.exp( -kappa_n * inverseAspectRatio * (xOvera - rho0));
     
     deltar = 0.5
@@ -209,19 +234,12 @@ def problem_setup():
     ionCharge = 1
     #mref = 2  # do I need mref??
     
-    
-    #rho0 = 0.5
-    #kappa_n = 2.22;
-    #invasp = minorRadius / majorRadius
-    #densityProfileGene = density_profile(rhoGene)
     densityProfileTango = density_profile(rhoTango)
-    #densityProfileGene = 3.3e19 * np.exp(-kappa_n * invasp * (rhoGene - rho0))
-    #densityProfileTango = 3.3e19 * np.exp(-kappa_n * invasp * (rhoTango - rho0))
     
     # create object for interfacing tango and GENE radial grids
        # must be consistent with whether Tango's or Gene's radial domain extends farther radially outward
     rExtrapZoneLeft = 0.75 * minorRadius
-    rExtrapZoneRight = 0.81 * minorRadius
+    rExtrapZoneRight = 0.80 * minorRadius
     polynomialDegree = 1
     gridMapper = tango.interfacegrids_gene.TangoOutsideExtrapCoeffs(rTango, rGene, rExtrapZoneLeft, rExtrapZoneRight, polynomialDegree)
     
@@ -284,7 +302,7 @@ turbhandler.seed_EWMA_turb_flux(heatFluxSeed)
 
 # set up FileHandlers
 #  GENE output to save periodically.  For list of available, see handlers.py
-diagdir = '/scratch2/scratchdirs/jbparker/genedata/prob22/'
+diagdir = DIAGDIR
 f1HistoryHandler = tango.handlers.SaveGeneOutputHandler('checkpoint_000', iterationInterval=2, diagdir=diagdir)
 
 geneFilesToSave = [name + '_000' for name in ['field', 'mom_ions', 'nrg', 'profile_ions', 'profiles_ions', 'srcmom_ions', 'vsp']]
@@ -295,7 +313,7 @@ tangoCheckpointHandler = tango.handlers.TangoCheckpointHandler(iterationInterval
 tangoHistoryHandler = tango.handlers.TangoHistoryHandler(iterationInterval=1, basename='tango_history', maxIterations=maxIterations)
 
 #  specify how long GENE runs between Tango iterations.  Specified in Lref/cref
-geneFluxModel.set_simulation_time(0.9)
+geneFluxModel.set_simulation_time(SIMTIME)
 
 solver = tango.solver.Solver(L, rTango, pressureICTango, pressureRightBC, t_array, maxIterations, tol, compute_all_H, turbhandler)
 
