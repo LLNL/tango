@@ -5,10 +5,9 @@ import numpy as np
 import os
 from tango import handlers
 
-def test_f1history_handler_execute():
-    """Test the Savef1HistoryHandler execute() method --- copying the f1 checkpoint file"""
-    basename = 'f1_iteration_history'
-    f1Handler = handlers.Savef1HistoryHandler(iterationInterval=1, basename=basename)
+def test_geneoutput_handler_execute():
+    """Test the SaveGeneOutputHandler execute() method --- copying the f1 checkpoint file"""
+    f1Handler = handlers.SaveGeneOutputHandler('checkpoint_000', iterationInterval=1, diagdir='')
     # setup -- create an empty file 
     genefile = 'checkpoint_000'
     open(genefile, 'w').close()
@@ -17,7 +16,7 @@ def test_f1history_handler_execute():
     iterationNumber = 12
     f1Handler.execute(data, iterationNumber)
     
-    dest = basename + '_' + str(iterationNumber)
+    dest = 'tg_checkpoint' + '_' + str(iterationNumber)
     assert os.path.isfile(dest) == True
     
     # teardown

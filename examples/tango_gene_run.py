@@ -1,17 +1,43 @@
+"""
+Checklist for a Gene-Tango run:
+GENE parameters file
+    diagdir
+    read checkpoint
+    parallelization / number of processors
+
+submit.cmd file
+    time limit
+    number of processors
+
+Tango python file
+    maximum number of iterations
+    EWMA parameters
+    diagdir
+    GENE simulation time per iteration
+    density profile
+    etc.   
+"""
+
 from __future__ import division, absolute_import
 import numpy as np
-
+import time
 
 # Tango imports... should simplify these so I'm not importing them all separately!
 import tango
 import tango.gene_startup
 import tango.smoother
 import tango.genecomm_unitconversion
-import tango.logging
-from tango.extras import util # for duration_as_hms
+import tango.tango_logging as tlog
+import tango.utilities.util # for duration_as_hms
+import gene_tango
+
+# constants
+MAXITERS = 50
+DIAGDIR = '/scratch2/scratchdirs/jbparker/genedata/prob##/'
+SIMTIME = 50 # GENE simulation time per iteration, in Lref/cref
 
 def initialize_iteration_parameters():
-    maxIterations = 3
+    maxIterations = MAXITERS
     thetaParams = {'Dmin': 1e-5,
                    'Dmax': 1e3,
                    'dpdxThreshold': 400000}
@@ -23,6 +49,34 @@ def initialize_iteration_parameters():
     tol = 1e-11  # tol for convergence... reached when a certain error < tol
     return (maxIterations, lmParams, tol)
 
+def density_profile(rho):
+    """density profile, fixed in time.
+    Inputs:
+      rho       normalized radial coordinate rho=r/a (array)
+    Outputs:
+      T         density profile in SI (array)
+    """
+    minorRadius = 0.594  # a
+    majorRadius = 1.65  # R0
+    inverseAspectRatio = minorRadius / majorRadius
+    rho0 = 0.5
+    
+    # density profile
+    n0 = 3.3e19;     # in SI, m^-3
+    kappa_n = 2.22;  # R0 / Ln
+    #n = n0 * np.exp( -kappa_n * inverseAspectRatio * (xOvera - rho0));
+    
+    deltar = 0.5
+    rhominus = rho - rho0 + deltar/2
+    deltan = 0.1
+    n = n0 * np.exp( -kappa_n * inverseAspectRatio * (rho - rho0 - deltan * (np.tanh(rhominus/deltan) - np.tanh(deltar/2/deltan))))
+    
+    # set n to a constant for rho < rho0-deltar/2
+    ind = int(np.abs(rho - (rho0 - deltar/2)).argmin())
+    ind2 = (rho < (rho0-deltar/2))
+    n[ind2] = n[ind];
+    return n
+    
 def temperature_initial_condition(rho):
     """Initial temperature profile
     Inputs:
@@ -92,6 +146,15 @@ def add_one_if_even(n):
         return n
     else:
         raise ValueError('n does not appear to be an integer.')
+        
+def read_seed_turb_flux():
+    """Read in a file that contains a turbulent heat flux profile to use as the EWMA seed.
+    
+    The seed should probably come from a long run of GENE (long compared to a single iteration here) so
+    that the heat flux is averaged over many cycles.  Heat flux here is qhat, not V' qhat."""
+    filenameHeatFluxSeed = 'heat_flux_seed'
+    heatFluxProfile = np.loadtxt(filenameHeatFluxSeed, unpack=True)
+    return heatFluxProfile
     
 class ComputeAllH(object):
     def __init__(self, turbhandler, Vprime, minorRadius, majorRadius, A):
@@ -171,17 +234,12 @@ def problem_setup():
     ionCharge = 1
     #mref = 2  # do I need mref??
     
-    
-    rho0 = 0.5
-    kappa_n = 2.22;
-    invasp = minorRadius / majorRadius
-    densityProfileGene = 3.3e19 * np.exp(-kappa_n * invasp * (rhoGene - rho0))
-    densityProfileTango = 3.3e19 * np.exp(-kappa_n * invasp * (rhoTango - rho0))
+    densityProfileTango = density_profile(rhoTango)
     
     # create object for interfacing tango and GENE radial grids
        # must be consistent with whether Tango's or Gene's radial domain extends farther radially outward
     rExtrapZoneLeft = 0.75 * minorRadius
-    rExtrapZoneRight = 0.81 * minorRadius
+    rExtrapZoneRight = 0.80 * minorRadius
     polynomialDegree = 1
     gridMapper = tango.interfacegrids_gene.TangoOutsideExtrapCoeffs(rTango, rGene, rExtrapZoneLeft, rExtrapZoneRight, polynomialDegree)
     
@@ -201,7 +259,7 @@ def problem_setup():
     
     # GENE setup
     fromCheckpoint = True    # true if restarting a simulation from an already-saved checkpoint
-    (geneFluxModel, MPIrank) = tango.gene_startup.setup_gene_run(rTango, rGene, minorRadius, majorRadius, B0, ionMass, ionCharge, densityProfileTango, pressureICTango, safetyFactorGeneGrid,
+    geneFluxModel = tango.gene_startup.setup_gene_run(rTango, rGene, minorRadius, majorRadius, B0, ionMass, ionCharge, densityProfileTango, pressureICTango, safetyFactorGeneGrid,
                                                                  Bref, Lref, Tref, nref, gridMapper, fromCheckpoint)
     
     
@@ -228,24 +286,34 @@ def problem_setup():
     # initialize the compute all H object
     compute_all_H = ComputeAllH(turbhandler, VprimeTango, minorRadius, majorRadius, A)
     t_array = np.array([0, 1e4])  # specify the timesteps to be used.
-    return (MPIrank, L, rTango, pressureRightBC, pressureICTango, maxIterations, tol, geneFluxModel, turbhandler, compute_all_H, t_array)
+    return (L, rTango, pressureRightBC, pressureICTango, maxIterations, tol, geneFluxModel, turbhandler, compute_all_H, t_array)
 
     
 # ************************************************** #
 ####              START OF MAIN PROGRAM           ####
 # ************************************************** #
+MPIrank = gene_tango.init_mpi()
+tlog.setup(True, MPIrank, tlog.DEBUG)
+(L, rTango, pressureRightBC, pressureICTango, maxIterations, tol, geneFluxModel, turbhandler, compute_all_H, t_array) = problem_setup()
 
-(MPIrank, L, rTango, pressureRightBC, pressureICTango, maxIterations, tol, geneFluxModel, turbhandler, compute_all_H, t_array) = problem_setup()
-
-
+# seed the EWMA for the turbulent heat flux
+heatFluxSeed = read_seed_turb_flux()
+turbhandler.seed_EWMA_turb_flux(heatFluxSeed)
 
 # set up FileHandlers
-f1HistoryHandler = tango.handlers.Savef1HistoryHandler(iterationInterval=1, basename='f1_iteration_history', genefile='checkpoint_000')
+#  GENE output to save periodically.  For list of available, see handlers.py
+diagdir = DIAGDIR
+f1HistoryHandler = tango.handlers.SaveGeneOutputHandler('checkpoint_000', iterationInterval=2, diagdir=diagdir)
+
+geneFilesToSave = [name + '_000' for name in ['field', 'mom_ions', 'nrg', 'profile_ions', 'profiles_ions', 'srcmom_ions', 'vsp']]
+geneOutputHandler = tango.handlers.SaveGeneOutputHandler(*geneFilesToSave, iterationInterval=1, diagdir=diagdir)
+
+#  Tango handlers
 tangoCheckpointHandler = tango.handlers.TangoCheckpointHandler(iterationInterval=1, basename='tango_checkpoint')
 tangoHistoryHandler = tango.handlers.TangoHistoryHandler(iterationInterval=1, basename='tango_history', maxIterations=maxIterations)
 
-# specify how long GENE runs between Tango iterations.  Specified in Lref/cref
-geneFluxModel.set_simulation_time(50)
+#  specify how long GENE runs between Tango iterations.  Specified in Lref/cref
+geneFluxModel.set_simulation_time(SIMTIME)
 
 solver = tango.solver.Solver(L, rTango, pressureICTango, pressureRightBC, t_array, maxIterations, tol, compute_all_H, turbhandler)
 
@@ -253,34 +321,42 @@ solver = tango.solver.Solver(L, rTango, pressureICTango, pressureRightBC, t_arra
 parallelEnvironment = True
 solver.fileHandlerExecutor.set_parallel_environment(parallelEnvironment, MPIrank)
 solver.fileHandlerExecutor.add_handler(f1HistoryHandler)
+solver.fileHandlerExecutor.add_handler(geneOutputHandler)
 solver.fileHandlerExecutor.add_handler(tangoCheckpointHandler)
 solver.fileHandlerExecutor.add_handler(tangoHistoryHandler)
 
 # create parameters for dataSaverHandler
-arraysToSave = ['H2', 'H3', 'profile', 
+arraysToSave = ['xTurbGrid',
+                'H2', 'H3', 'profile', 
                 'D', 'c', 
                 'profileEWMATurbGrid',
-                'fluxTurbGrid', 'fluxEWMATurbGrid',
+                'fluxTurbGrid', 'smoothedFluxTurbGrid', 'fluxEWMATurbGrid',
                 'DHatTurbGrid', 'cHatTurbGrid', 'thetaTurbGrid']  # for list of possible arrays, see solver._pkgdata()
-databasename = 'datasaver'
-solver.dataSaverHandler.initialize_datasaver(databasename, maxIterations, arraysToSave)
+dataBasename = 'datasaver'
+tlog.info("Preparing DataSaver to save files with prefix {}.".format(dataBasename))
+solver.dataSaverHandler.initialize_datasaver(dataBasename, maxIterations, arraysToSave)
 solver.dataSaverHandler.set_parallel_environment(parallelEnvironment, MPIrank)
 
-# logging ??
+
+tlog.info("Entering main time loop...")
+
+startTime = time.time()
 while solver.ok:
-     Implicit time advance: iterate to solve the nonlinear equation!
-     solver.TakeTimestep()
-    
-#print("Using pseudo-GENE, python-GENE interface code initialized OK!")
+     # Implicit time advance: iterate to solve the nonlinear equation!
+     solver.take_timestep()
 
-
-
-if solver.reached_end == True:
-    if MPIrank==0:
-        print("The solution has been reached successfully.")
-        print("Took {} iterations".format(solver.l))
+if solver.reachedEnd == True:
+    tlog.info("The solution has been reached successfully.")
+    tlog.info("Took {} iterations".format(solver.l))
 else:
-    if MPIrank==0:
-        print("The solver failed for some reason.")
-        
-# other logging??
+    tlog.info("The solver failed for some reason.")
+    tlog.info("The residual at the end is {}".format(solver.errHistoryFinal[-1]))
+    
+tlog.info("The profile at the end is:")
+tlog.info("{}".format(solver.profile))
+
+endTime = time.time()
+durationHMS = tango.utilities.util.duration_as_hms(endTime - startTime)
+tlog.info("Total wall-time spent for Tango run: {}".format(durationHMS))
+
+gene_tango.finalize_mpi()

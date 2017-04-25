@@ -9,6 +9,7 @@ See https://github.com/LLNL/tango for copyright and license information
 from __future__ import division
 import numpy as np
 import shutil
+import os
 
 class Executor(object):
     """Coordinates execution of tasks of Handlers, whose primary purpose is dealing with
@@ -111,25 +112,67 @@ class Handler(object):
         pass
 
 
-class Savef1HistoryHandler(Handler):
+class SaveGeneOutputHandler(Handler):
     """Handler for saving the f1 checkpoint history at a desired interval.
     
     Under usual conditions, Tango runs GENE to save a checkpoint file for f1 called checkpoint_000 at the end
     of every GENE run.  It gets overwritten on each run.  To preserve the checkpoint history, we make a copy
     of this file, leaving the original intact so that GENE uses it on its next startup as its initial
     condition.
+    
+    Files printed out by GENE (ignoring the suffix _###)
+        autopar*            (autoparallelization) * = ignore here
+        checkpoint          distribution function f1.  Binary
+        circular*           (magnetic geometry data)
+        codemods*           (differences in code compared to repository)
+        field               contains phi1 (and A1parallel, B1parallel in EM simulation).  Binary
+        mom_ions            contains velocity-space moments of f1 including perturbed density, temperature.  Binary.
+        nrg                 contains volume-averaged quantities.  ASCII
+        parameters*         (output parameters file)
+        profile_ions        contains the time-dependent output profiles (T,n) and flux (Gamma, Q), saved
+                                instantaneously every istep_prof.  ASCII
+        profiles_ions       contains the profiles (T, n) actually used for the GENE run.  ASCII
+        s_checkpoint*       (safety checkpoint)
+        srcmom_ions         contains the Krook source term used to maintain f0.  Binary
+        vsp                 velocity-space data dependent on the z coordinate
+    
+    When saving a file like checkpoint_000, this will be renamed to tg_checkpoint_<iterationNumber>
     """
-    def __init__(self, iterationInterval=np.inf, basename='f1_iteration_history', genefile='checkpoint_000'):
-        """blah"""
+    def __init__(self, *geneFilenames, **kwargs):
+        """Constructor.
+        
+        Inputs:
+          geneFilenames         Gene output files to be saved (strings).  Should be from the names above,
+                                    e.g., 'checkpoint_000', 'nrg_000', 'profiles_ions_000', ...
+          kwargs
+            iterationInterval
+            diagdir             directory where GENE's output files are saved (string)
+        """
+        iterationInterval = kwargs.get('iterationInterval', np.inf)
         Handler.__init__(self, iterationInterval)
-        self.basename = basename
-        self.genefile = genefile
+        self.diagdir = kwargs.get('diagdir', '')
+        self.geneFilenames = geneFilenames
+        self.prefix = 'tg_'  # prefix to be appended to files
+        
         
     def execute(self, data, iterationNumber):
         """Copy the gene file to a new file"""
-        destination = self.basename + '_' + str(iterationNumber)
-        shutil.copyfile(self.genefile, destination)
+        for geneFilename in self.geneFilenames:
+            destination = os.path.join(self.diagdir, self.prefix + self.strip_suffix(geneFilename) + '_' + str(iterationNumber))
+            geneFilepath = os.path.join(self.diagdir, geneFilename)
+            shutil.copyfile(geneFilepath, destination)
         
+    def strip_suffix(self, geneFilename):
+        """Strip the suffix _<###> from a filename like checkpoint_000.
+        
+        E.g.,
+          strip_suffix('checkpoint_000') returns 'checkpoint'
+          strip_suffix('profiles_ions_000') returns 'profiles_ions'
+        
+        Inputs:
+          geneFilename      input filename (string)
+        """
+        return geneFilename.rsplit('_', 1)[0]
 
 class TangoCheckpointHandler(Handler):
     """Handler for writing out a checkpoint for Tango.

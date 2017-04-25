@@ -20,6 +20,8 @@ import os
 import glob
 import time
 
+diagdir = ''
+
 def gene_check():
     """Perform checking to make sure GENE works.
     
@@ -48,7 +50,7 @@ def gene_check():
     
     # choose a suffix number unlikely to be used in pratice, then check that the checkpoint file does not exist already 
     checkpointSuffix = 999  # choose a checkpoint number unlikely to be used in practice
-    assert not checkpoint_exists(checkpointSuffix), "Error in gene_check().  Checkpoint file with suffix {} aready exists".format(checkpoint_suffix_string(checkpointSuffix))
+    #assert not checkpoint_exists(checkpointSuffix), "Error in gene_check().  Checkpoint file with suffix {} aready exists".format(checkpoint_suffix_string(checkpointSuffix))
     
     # Perform a very short GENE run
     (MPIrank, dVdxHat, sqrt_gxx, avgParticleFluxHat, avgHeatFluxHat, temperatureOutput, densityOutput) = genecomm_lowlevel.call_gene_low_level(
@@ -56,7 +58,7 @@ def gene_check():
                 temperatureHat=temperatureHat, densityHat=densityHat, safetyFactor=safetyFactor,
                 Lref=Lref, Bref=Bref, rhoStar=rhoStar, Tref=Tref, nref=nref, checkpointSuffix=checkpointSuffix)
     
-    time.sleep(0.1) # pause to allow processes to catch up
+    time.sleep(0.3) # pause to allow processes to catch up
     
     # Check that necessary checkpoint files are created, then remove them
     if MPIrank==0:
@@ -74,7 +76,7 @@ def clean_files(checkpointSuffix):
     Inputs:
       checkpointSuffix      (integer)
     """
-    globStr = '*_{}'.format(checkpoint_suffix_string(checkpointSuffix))
+    globStr = diagdir + '*_{}'.format(checkpoint_suffix_string(checkpointSuffix))
     filelist = glob.glob(globStr)
     for f in filelist:
         os.remove(f)
@@ -90,7 +92,7 @@ def checkpoint_exists(checkpointSuffix):
     Outputs:
       exists                True if the checkpoint file exists, False if not (boolean)
     """
-    filename = 'checkpoint_' + checkpoint_suffix_string(checkpointSuffix)
+    filename = diagdir + 'checkpoint_' + checkpoint_suffix_string(checkpointSuffix)
     exists = os.path.exists(filename)
     return exists
     

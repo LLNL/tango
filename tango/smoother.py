@@ -24,10 +24,10 @@ def moving_average(x, windowSize):
     This function requires that windowSize be an odd integer, so that a centered moving average makes sense.
     
     Inputs:
-      x                 input data (array)
+      x                 input data (1D array)
       windowSize        size of moving average window in points (odd integer)
     Outputs:
-      xAvg              output data (array)
+      xAvg              output data (1D array)
     """
     
     assert windowSize % 2 == 1, 'windowSize must be an odd integer.'

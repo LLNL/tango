@@ -28,6 +28,7 @@ See https://github.com/LLNL/tango for copyright and license information
 
 from __future__ import division
 import datetime
+import sys
 
 # globals
 parallelEnvironment = None
@@ -97,6 +98,7 @@ def _log(message, level):
 def _log_to_stdout(message):
     """Log the message to stdout."""
     print(message)
+    sys.stdout.flush()
 
 def serial_or_rank0():
     """Return true if in a nonparallel environment or if MPIrank==0, otherwise False"""
