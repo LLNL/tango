@@ -216,12 +216,12 @@ def problem_setup():
     drho = rhoRightBndy / (numRadialPtsTango - 0.5)  # spatial grid size
     rhoTango = np.linspace(drho/2, rhoRightBndy, numRadialPtsTango)  # Tango inner-most point is set at delta rho/2, not exactly zero.
     rTango = rhoTango * minorRadius # physical radius r, measured in meters, used as the independent coordinate in Tango
-    drTango = rTango[1] - rTango[0]
+    #drTango = rTango[1] - rTango[0]
     L = rTango[-1]  # size of domain
     
-    VprimeGene = 4 * np.pi**2 * majorRadius * rGene
+    #VprimeGene = 4 * np.pi**2 * majorRadius * rGene
     VprimeTango = 4 * np.pi**2 * majorRadius * rTango
-    gradPsiSqTango = np.ones_like(rTango) # |grad r|^2 = 1
+    #gradPsiSqTango = np.ones_like(rTango) # |grad r|^2 = 1
     
     Bref = 1.14
     B0 = Bref
@@ -335,7 +335,10 @@ tangoHistoryHandler = tango.handlers.TangoHistoryHandler(iterationInterval=1, ba
 #  specify how long GENE runs between Tango iterations.  Specified in Lref/cref
 geneFluxModel.set_simulation_time(SIMTIME)
 
-solver = tango.solver.Solver(L, rTango, pressureICTango, pressureRightBC, t_array, maxIterations, tol, compute_all_H, turbhandler)
+# initialize the user control function
+user_control_func = UserControlFunc(turbhandler)
+
+solver = tango.solver.Solver(L, rTango, pressureICTango, pressureRightBC, t_array, maxIterations, tol, compute_all_H, turbhandler, user_control_func=user_control_func)
 
 ## Set up the file handling 
 parallelEnvironment = True
