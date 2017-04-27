@@ -152,6 +152,15 @@ class TurbulenceHandler(object):
         (EWMAParamTurbFlux, EWMAParamProfile) = self.lodestroMethod.get_ewma_params()
         return (EWMAParamTurbFlux, EWMAParamProfile)
     
+    def set_ewma_params(self, EWMAParamTurbFlux, EWMAParamProfile):
+        """Set new values for the EWMA parameter for the turbulent flux and the profile.
+        
+        Inputs:
+          EWMAParamTurbFlux     (scalar)
+          EWMAParamProfile      (scalar)
+        """
+        self.lodestroMethod.set_ewma_params(EWMAParamTurbFlux, EWMAParamProfile)
+    
     def restore_ewma_from_checkpoint(self, profileEWMA, turbFluxEWMA):
         """Restore the EWMA iterates for both profile and turbulent flux from a checkpoint.
         
@@ -262,6 +271,16 @@ class lm(object):
         EWMAParamTurbFlux = self._EWMATurbFlux.EWMAParam 
         EWMAParamProfile = self._EWMAProfile.EWMAParam
         return (EWMAParamTurbFlux, EWMAParamProfile)
+        
+    def set_ewma_params(self, EWMAParamTurbFlux, EWMAParamProfile):
+        """Set the EWMA parameter for turbulent flux and the profile.
+        
+        Inputs:
+          EWMAParamTurbFlux     (scalar)
+          EWMAParamProfile      (scalar)
+        """
+        self._EWMATurbFlux.EWMAParam = EWMAParamTurbFlux
+        self._EWMAProfile.EWMAParam = EWMAParamProfile
     
     def set_ewma_iterates(self, profileEWMA, turbFluxEWMA):
         """Set the EWMA iterates for both the profile and turbulent flux.
@@ -270,10 +289,10 @@ class lm(object):
           profileEWMA   New EWMA iterate for the profile (array)
           turbFluxEWMA  New EWMA iterate for the turbulent flux (array)
         """
-        self.set_ewma_profiles(profileEWMA)
+        self.set_ewma_profile(profileEWMA)
         self.set_ewma_turb_flux(turbFluxEWMA)
     
-    def set_ewma_profiles(self, profileEWMA):
+    def set_ewma_profile(self, profileEWMA):
         """Set the EWMA iterate for the profile"""
         self._EWMAProfile.set_ewma_iterate(profileEWMA)
     

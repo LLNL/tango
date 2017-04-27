@@ -15,6 +15,7 @@ Tango python file
     diagdir
     GENE simulation time per iteration
     density profile
+    user_control_func
     etc.   
 """
 
@@ -32,7 +33,7 @@ import tango.utilities.util # for duration_as_hms
 import gene_tango
 
 # constants
-MAXITERS = 50
+MAXITERS = 158
 DIAGDIR = '/scratch2/scratchdirs/jbparker/genedata/prob##/'
 SIMTIME = 50 # GENE simulation time per iteration, in Lref/cref
 
@@ -41,8 +42,8 @@ def initialize_iteration_parameters():
     thetaParams = {'Dmin': 1e-5,
                    'Dmax': 1e3,
                    'dpdxThreshold': 400000}
-    EWMAParamTurbFlux = 0.1
-    EWMAParamProfile = 0.1
+    EWMAParamTurbFlux = 0.3
+    EWMAParamProfile = 0.3
     lmParams = {'EWMAParamTurbFlux': EWMAParamTurbFlux,
             'EWMAParamProfile': EWMAParamProfile,
             'thetaParams': thetaParams}
@@ -63,9 +64,7 @@ def density_profile(rho):
     
     # density profile
     n0 = 3.3e19;     # in SI, m^-3
-    kappa_n = 2.22;  # R0 / Ln
-    #n = n0 * np.exp( -kappa_n * inverseAspectRatio * (xOvera - rho0));
-    
+    kappa_n = 2.22;  # R0 / Ln    
     deltar = 0.5
     rhominus = rho - rho0 + deltar/2
     deltan = 0.1
@@ -168,7 +167,7 @@ class ComputeAllH(object):
         
         Inputs:
           t         time (scalar)
-          r       radial coordinate in SI (array)
+          r         radial coordinate in SI (array)
           pressure  pressure profile in SI (array)
         """
         H1 = 1.5 * self.Vprime
@@ -288,6 +287,27 @@ def problem_setup():
     t_array = np.array([0, 1e4])  # specify the timesteps to be used.
     return (L, rTango, pressureRightBC, pressureICTango, maxIterations, tol, geneFluxModel, turbhandler, compute_all_H, t_array)
 
+    
+class UserControlFunc(object):
+    def __init__(self, turbhandler):
+        self.turbhandler = turbhandler
+    def __call__(self, solver):
+        """
+        User Control Function for the solver.
+        
+        Here, modify the EWMA paramater as the iteration number increases to converge quickly at the beginning and then to get more
+        averaging towards the end.
+        
+        Inputs:
+          solver            tango Solver (object)
+        """
+        iterationNumber = solver.l
+        if iterationNumber == 50:
+            self.turbhandler.set_ewma_params(0.1, 0.1)
+            # run for 2.5/EWMA = 25 iterations
+        if iterationNumber == 75:
+            self.turbhandler.set_ewam_params(0.03, 0.03)
+            # run for 2.5/EWMA = 83 iterations
     
 # ************************************************** #
 ####              START OF MAIN PROGRAM           ####

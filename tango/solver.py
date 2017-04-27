@@ -30,20 +30,40 @@ from .utilities import util
 
 
 class Solver(object):
-    def __init__(self, L, x, profileIC, profileRightBC, tArray, maxIterations, tol, compute_all_H, turbhandler):
-        self.L = L        # size of domain
-        self.x = x        # grid (array)
+    def __init__(self, L, x, profileIC, profileRightBC, tArray, maxIterations, tol, compute_all_H, turbhandler, user_control_func=None):
+        """Constructor
+        
+        Inputs:
+          L                     size of domain (scalar)
+          x                     independent coordinate grid (array)                    
+          profileIC             initial condition of the profile, used to initialize "m minus 1" variable (array)
+          profileRightBC        dirichlet boundary condition for the profile at the right (scalar)
+          tArray                times t at which the solution is desired (array).  First value is the initial condition
+          maxIterations         maximum number of iterations per timestep (scalar)
+          tol                   tolerance for iteration convergence (scalar)
+          compute_all_H         computes the H coefficients defining the linear transport equation for iteration (function)
+          turbhandler           Design note: why do I need turbhandler as input?  I only use it here to get_EWMA_params.  I don't like this; need better design.  
+                                    What if there is no turbhandler? (object)
+          user_control_func     [optional] user-supplied function for customizing control (function).  Run once per iteration, at the beginning.
+                                    The function must take one argument, and that is the Solver object.
+        """
+        self.L = L
+        self.x = x
         self.N = len(x)
         self.dx = x[1] - x[0]
-        self.profile = profileIC                # initial condition for the profile (array)
-        self.profile_mminus1 = profileIC        # initialize "m minus 1" variable
-        self.profileRightBC = profileRightBC    # dirichlet boundary condition
-        self.tArray = tArray                    # times t at which the solution is desired (array).  First value is initial condition
-        self.maxIterations = maxIterations      # maximum number of iterations per timestep (scalar)
-        self.tol = tol                          # tolerance for iteration convergence (scalar)
+        self.profile = profileIC
+        self.profile_mminus1 = profileIC
+        self.profileRightBC = profileRightBC
+        self.tArray = tArray
+        self.maxIterations = maxIterations
+        self.tol = tol
         assert callable(compute_all_H), "compute_all_H must be callable (e.g., a function)"
         self.compute_all_H = compute_all_H
-        self.turbhandler = turbhandler          # why do I need turbhandler as input?  I only use it here to get_EWMA_params.  I don't like this; need better design.  What if there is no turbhandler?
+        self.turbhandler = turbhandler
+        if user_control_func is not None:
+            assert callable(user_control_func), "user_control_func must be callable (e.g., a function)"
+        self.user_control_func = user_control_func
+        
         
         # initialize other instance data
         # DataSaverHandler and fileHandlerExecutor are two different ways of dealing with saving files on disk (and have different goals)
@@ -102,6 +122,10 @@ class Solver(object):
 
     def compute_next_iteration(self):
         startTime = time.time()
+        
+        # Run the customized control function if passed in
+        if self.user_control_func is not None:
+            self.user_control_func(self)
         
         # compute H's from current iterate of profile
         (H1, H2, H3, H4, H6, H7, extraturbdata) = self.compute_all_H(self.t, self.x, self.profile)

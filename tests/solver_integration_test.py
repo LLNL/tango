@@ -133,6 +133,35 @@ def test_solver_small_ewma_param():
     selfConsistencyErrorFinal = solver.errHistoryFinal[-1]
     assert selfConsistencyErrorFinal <= tol
     
+def test_solver_user_control_func():
+    """Test the use of the user control function.  Here, change the EWMA parameter in the course of solving
+    at specific iterations.    
+    """
+    L, N, dx, x, nL, n = initialize_shestakov_problem()
+    junk, lmParams, junk2 = initialize_parameters()
+    
+    maxIterations = 10
+    tol = 1e-9
+    fluxModel = shestakov_nonlinear_diffusion.shestakov_analytic_fluxmodel(dx)
+    turbHandler = tng.lodestro_method.TurbulenceHandler(dx, x, lmParams, fluxModel)
+    compute_all_H = ComputeAllH(turbHandler)
+    t_array = np.array([0, 1e4])  # specify the timesteps to be used.
+    
+    user_control_func = UserControlFunc(turbHandler)
+    solver = tng.solver.Solver(L, x, n, nL, t_array, maxIterations, tol, compute_all_H, turbHandler, user_control_func)
+    
+    expEWMAParamStart = lmParams['EWMAParamTurbFlux']
+    (obsEWMAParamStart, junk) = turbHandler.get_ewma_params()
+    assert expEWMAParamStart == obsEWMAParamStart
+    
+    while solver.ok:
+        # Implicit time advance: iterate to solve the nonlinear equation!
+        solver.take_timestep()
+        
+    expEWMAParamFinish = 0.13
+    (obsEWMAParamFinish, junk) = turbHandler.get_ewma_params()
+    assert expEWMAParamFinish == obsEWMAParamFinish
+    
 #==============================================================================
 #    End of tests.  Below are helper functions used by the tests
 #==============================================================================
@@ -181,3 +210,20 @@ class ComputeAllH(object):
         H4 = None
         H6 = None
         return (H1, H2, H3, H4, H6, H7, extradata)
+
+class UserControlFunc(object):
+    def __init__(self, turbhandler):
+        self.turbhandler = turbhandler
+    def __call__(self, solver):
+        """
+        User Control Function for the solver.
+        
+        Here, modify the EWMA paramater as the iteration number increases to converge quickly at the beginning and then to get more
+        averaging towards the end.
+        
+        Inputs:
+          solver            tango Solver (object)
+        """
+        iterationNumber = solver.l
+        if iterationNumber == 5:
+            self.turbhandler.set_ewma_params(0.13, 0.13)
