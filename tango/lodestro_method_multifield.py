@@ -20,9 +20,11 @@ Iterate averaging is achieved through an exponentially weighted moving average (
 See https://github.com/LLNL/tango for copyright and license information
 """
 
-from __future__ import division
+from __future__ import division, print_function
 import numpy as np
 from . import derivatives
+from . import multifield
+
 
 class TurbulenceHandler(object):
     """This class acts as an interface to underlying packages for the Lodestro Method, a model 
@@ -91,7 +93,7 @@ class TurbulenceHandler(object):
             self.doSmoothing = False
             
         
-    def Hcontrib_turbulent_flux(self, profile):
+    def Hcontrib_turbulent_flux(self, profile, fluxTurb):
         """Given the lth iterate of a profile (e.g., n), perform all the steps necessary to
         calculate the contributions to the transport equation.  This involves using the
         LoDestro Method to average over iterates, the fluxModel to compute a turbulent flux,
@@ -206,6 +208,125 @@ class TurbulenceHandler(object):
             raise RuntimeError('Invalid value for isNonCartesian.')
         return (H2contrib, H3contrib)
     
+
+class TurbulenceHandlerMultifield(object):
+    """multifield-aware generalization of TurbulenceHandler (see above)
+    """
+    def __init__(self, dxTurbGrid, xTango, fluxModel, profileOrderedLabels, fluxOrderedLabels, VprimeTango=None, fluxSmoother=None):
+        self.dxTurbGrid = dxTurbGrid
+        self.xTango = xTango        
+        self.fluxModel = fluxModel
+        assert hasattr(fluxModel, 'get_flux') and callable(getattr(fluxModel, 'get_flux'))
+        
+        self.profileOrderedLabels = profileOrderedLabels
+        self.fluxOrderedLabels = fluxOrderedLabels        
+        
+        if VprimeTango is not None:
+            self.VprimeTango = VprimeTango
+            self.isNonCartesian = True
+        else:
+            self.isNonCartesian = False
+            
+        if fluxSmoother is not None:
+            assert hasattr(fluxSmoother, 'smooth') and callable(getattr(fluxSmoother, 'smooth'))
+            self.fluxSmoother = fluxSmoother
+            self.doSmoothing = True
+        else:
+            self.doSmoothing = False
+            
+    def turbflux_to_Hcoeffs_multifield(self, fields, profiles):
+        """multifield-aware conversion of turbulent flux to H coefficients.
+        
+        Must be multifield-aware because we must perform the mapping of ALL profiles to the turbulence
+        grid and EWMA ALL profiles before performing the computation of turbulent flux.
+        
+        Hmm...  Make this a function in the turbhandler class
+        
+        
+        Inputs:
+          fields                    collection of fields (list)
+          profiles                  collection of profiles, accessed by label (dict)
+        Outputs:
+          HCoeffsTurbAllFields      collection of HCoefficients, accessed by label, containing the contributions from turbulence (dict)
+          extradataAllFields        extra data that might be useful for debugging or data analysis (dict)
+        """
+        # map profiles to turbulence grid, and compute next EWMA iterate of profiles
+        profilesEWMATurbGrid = {}
+        for field in fields:
+            label = field.label
+            profileTurbGrid = field.gridMapper.map_profile_onto_turb_grid(profiles[label])
+            profileEWMATurbGrid = field.lodestroMethod.ewma_profile(profileTurbGrid)
+            profilesEWMATurbGrid[label] = profileEWMATurbGrid
+            
+            # DEBUGDEBUG
+#            f1=open('./profileout.dat', 'a')
+#            if label == 'field0':
+#                print('field0: profile = {}'.format(profiles[label][:4]), file=f1)
+#            elif label == 'field1':
+#                print('field1: profile = {}'.format(profiles[label][:4]), file=f1)
+#            f1.close()
+        
+        profilesEWMATurbGridArray = multifield.profile_dict_to_array(profilesEWMATurbGrid, self.profileOrderedLabels)
+            
+        # get next turbulent flux
+        fluxesTurbGridArray = self.fluxModel.get_flux(profilesEWMATurbGridArray)
+        fluxesTurbGrid = multifield.flux_array_to_dict(fluxesTurbGridArray, self.fluxOrderedLabels)  # transform fluxes from array to dict
+        
+        # Loop over fields and transform flux into effective transport coefficients
+        #  initialize dicts
+        HCoeffsTurbAllFields = {}
+        extradataAllFields = {}
+        for field in fields:
+            label = field.label
+            # spatially smooth the flux, if specified
+            if self.doSmoothing:
+                smoothedFluxTurbGrid = self.fluxSmoother.smooth(fluxesTurbGrid[label])
+            else:
+                smoothedFluxTurbGrid = fluxesTurbGrid[label]
+                        
+            # calculate the next iterate of relaxed flux using EWMA
+            fluxEWMATurbGrid = field.lodestroMethod.ewma_turb_flux(smoothedFluxTurbGrid)                
+            
+            # Convert the flux into effective transport coefficients
+            (DTurbGrid, cTurbGrid, DcDataTurbGrid) = field.lodestroMethod.flux_to_transport_coeffs(fluxEWMATurbGrid, profilesEWMATurbGrid[label], self.dxTurbGrid)
+            
+            # Map the transport coefficients from the turbulence grid back to the transport grid
+            (D, c) = field.gridMapper.map_transport_coeffs_onto_transport_grid(DTurbGrid, cTurbGrid)
+            (H2contrib, H3contrib) = self.Dc_to_Hcontrib(D, c)
+            HCoeffsTurb = multifield.HCoefficients(H2=H2contrib, H3=H3contrib)
+            HCoeffsTurbAllFields[label] = HCoeffsTurb
+            # Other data that may be useful for debugging or data analysis purposes
+            extradataAllFields[label] = {'D': D, 'c': c,
+                   'profileEWMATurbGrid': profilesEWMATurbGrid[label],
+                   'fluxTurbGrid': fluxesTurbGrid[label], 'smoothedFluxTurbGrid': smoothedFluxTurbGrid, 'fluxEWMATurbGrid': fluxEWMATurbGrid,
+                   'DTurbGrid': DTurbGrid, 'cTurbGrid': cTurbGrid,
+                   'DHatTurbGrid': DcDataTurbGrid['DHat'], 'cHatTurbGrid': DcDataTurbGrid['cHat'], 'thetaTurbGrid': DcDataTurbGrid['theta']}
+        
+            # other data to save??
+#           x = self.gridMapper.get_x_transport_grid()        
+#           xTurbGrid = self.gridMapper.get_x_turbulence_grid()
+            
+        return (HCoeffsTurbAllFields, extradataAllFields)
+            
+    def Dc_to_Hcontrib(self, D, c):
+        """Transform the effective diffusion coefficient D and effective convective velocity c
+        into the contributions to the H coefficients for the iteration-update solver for the
+        transport equation.  The form of the transport equation for ion pressure is 
+                3/2 V' dp/dt - d/dpsi[ V' D dp/dpsi - V'c p] + ...
+        Hence, H2 = V'*D  and  H3 = -V'*c.
+        """
+        #  Could change this to use the physics_to_H module
+        #     H2contrib = physics_to_H.GeometrizedDiffusionCoeffToH(D, Vprime)
+        #     H3contrib = physics_to_H.GeometrizedConvectionCoeffToH(c, Vprime):
+        if self.isNonCartesian == True:
+            H2contrib = self.VprimeTango * D
+            H3contrib = -self.VprimeTango * c
+        elif self.isNonCartesian == False:
+            H2contrib = D
+            H3contrib = -c
+        else:
+            raise RuntimeError('Invalid value for isNonCartesian.')
+        return (H2contrib, H3contrib)
         
         
 class lm(object):

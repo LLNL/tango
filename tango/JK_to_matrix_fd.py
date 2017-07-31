@@ -102,8 +102,14 @@ def JK_to_matrix(dt, dx, rightBC, psi_mminus1,
                          H1=K1, H2=K2, H3=K3, H4=K4, H6=K6, H7=K7)
     
     # coupling term: map J_8 to G^W and K_8 to G^U 
-    GW = _H8_contribution(J8)
-    GU = _H8_contribution(K8)
+    if J8 is not None:
+        GW = _H8_contribution(J8)
+    else:
+        GW = np.zeros_like(J1)
+    if K8 is not None:
+        GU = _H8_contribution(K8)
+    else:
+        GU = np.zeros_like(K1)
     
     UEqnCoeffs = MatEqnCoeffs(A=AU, B=BU, C=CU, D=DU, G=GW) # GW is not a typo here
     WEqnCoeffs = MatEqnCoeffs(A=AW, B=BW, C=CW, D=DW, G=GU)
@@ -167,7 +173,7 @@ def _interleave(a, b):
     
     Inputs:
       a         first input array (1D array)
-      b         first input array (1D array)
+      b         second input array (1D array)
     Outputs:
       c         interleaved output data (1D array)
     """
