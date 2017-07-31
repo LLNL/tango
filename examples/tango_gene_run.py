@@ -136,15 +136,6 @@ def source_H7(r, minorRadius, majorRadius, A):
     fhat = source_fhat(rho)
     H7contrib = A * fhat
     return H7contrib
-
-def add_one_if_even(n):
-    """if n is an even integer, add one and return an odd integer.  If n is an odd integer, return n"""
-    if n % 2 == 0:
-        return n + 1
-    elif n % 2 == 1:
-        return n
-    else:
-        raise ValueError('n does not appear to be an integer.')
         
 def read_seed_turb_flux():
     """Read in a file that contains a turbulent heat flux profile to use as the EWMA seed.
@@ -273,7 +264,6 @@ def problem_setup():
     windowSizeInGyroradii = 10
     rhoref = tango.genecomm_unitconversion.rho_ref(Tref, mref, Bref)
     windowSizeInPoints = int( np.round(windowSizeInGyroradii * rhoref / drGene) )
-    windowSizeInPoints = add_one_if_even(windowSizeInPoints)  # ensure windowSizeInPoints is odd for Smoother
     fluxSmoother = tango.smoother.Smoother(windowSizeInPoints)
     
     # creation of turbulence handler
