@@ -6,12 +6,12 @@ import numpy as np
 class Smoother(object):
     """Class-based interface to the moving_average function below."""
     def __init__(self, windowSize):
-        self.windowSize = windowSize
+        self.windowSize = add_one_if_even(windowSize)
     def smooth(self, x):
         return moving_average(x, self.windowSize)
 
 def moving_average(x, windowSize):
-    """Computes the centered moving average of x
+    """Computes the centered moving average of x.
     
     End points are handled in a special way.  At the end point, a centered moving average is not possible.  This occurs 
     for (windowSize-1)/2 points on each end.  What we do here is to simply not average these end points; the output of
@@ -41,3 +41,12 @@ def moving_average(x, windowSize):
     xAvg[:boundarySize] = x[:boundarySize]
     xAvg[-boundarySize:] = x[-boundarySize:]
     return xAvg
+    
+def add_one_if_even(n):
+    """if n is an even integer, add one and return an odd integer.  If n is an odd integer, return n"""
+    if n % 2 == 0:
+        return n + 1
+    elif n % 2 == 1:
+        return n
+    else:
+        raise ValueError('n does not appear to be an integer.')
