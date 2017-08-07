@@ -16,8 +16,8 @@ import tango.tango_logging as tlog
 from tango.extras import shestakov_nonlinear_diffusion
 import tango
 import tango.analysis
-import tango.lodestro_method_multifield
-import tango.solver_multifield
+import tango.lodestro_method
+import tango.solver
 import tango.multifield
 from tango import derivatives
 
@@ -74,12 +74,14 @@ class ComputeAllH_field1(object):
         
 class ShestakovTwoFluxModel(object):
     def __init__(self, dx):
-        self.fluxmodel0 = shestakov_nonlinear_diffusion.AnalyticFluxModel(dx)
-        self.fluxmodel1 = shestakov_nonlinear_diffusion.AnalyticFluxModel(dx)
-    def get_flux(self, profileArray):
-        fluxes = np.zeros_like(profileArray)
-        fluxes[0, :] = self.fluxmodel0.get_flux(profileArray[0, :])
-        fluxes[1, :] = self.fluxmodel1.get_flux(profileArray[1, :])
+        self.dx = dx
+    def get_flux(self, profiles):
+        n0 = profiles['n0']
+        n1 = profiles['n1']
+        
+        fluxes = {}
+        fluxes['n0'] = shestakov_nonlinear_diffusion.get_flux(n0, dx)
+        fluxes['n1'] = shestakov_nonlinear_diffusion.get_flux(n1, dx)
         return fluxes
         
     
@@ -98,22 +100,19 @@ nL1 = 0.01
 maxIterations, lmParams, tol = initialize_parameters()
 fluxModel = ShestakovTwoFluxModel(dx)
 
-label0 = 'field0'
-label1 = 'field1'
-labels = [label0, label1]
+label0 = 'n0'
+label1 = 'n1'
 
-
-
-turbHandler = tango.lodestro_method_multifield.TurbulenceHandlerMultifield(dx, x, fluxModel, labels, labels)
+turbHandler = tango.lodestro_method.TurbulenceHandler(dx, x, fluxModel)
 
 # set up for field0
 compute_all_H_field0 = ComputeAllH_field0()
-lm0 = tango.lodestro_method_multifield.lm(lmParams['EWMAParamTurbFlux'], lmParams['EWMAParamProfile'], lmParams['thetaParams'])
+lm0 = tango.lodestro_method.lm(lmParams['EWMAParamTurbFlux'], lmParams['EWMAParamProfile'], lmParams['thetaParams'])
 field0 = tango.multifield.Field(label=label0, rightBC=nL0, profile_mminus1=n, compute_all_H=compute_all_H_field0, lodestroMethod=lm0)
 
 # set up for field1
 compute_all_H_field1 = ComputeAllH_field1()
-lm1 = tango.lodestro_method_multifield.lm(lmParams['EWMAParamTurbFlux'], lmParams['EWMAParamProfile'], lmParams['thetaParams'])
+lm1 = tango.lodestro_method.lm(lmParams['EWMAParamTurbFlux'], lmParams['EWMAParamProfile'], lmParams['thetaParams'])
 field1 = tango.multifield.Field(label=label1, rightBC=nL1, profile_mminus1=n1, compute_all_H=compute_all_H_field1, lodestroMethod=lm1)
 
 # combine fields and do checking
@@ -122,10 +121,9 @@ tango.multifield.check_fields_initialize(fields)
 
 compute_all_H_all_fields = tango.multifield.ComputeAllHAllFields(fields, turbHandler)
 
-
 tArray = np.array([0, 1e4])  # specify the timesteps to be used.
 
-solver = tango.solver_multifield.Solver(L, x, tArray, maxIterations, tol, compute_all_H_all_fields, fields)
+solver = tango.solver.Solver(L, x, tArray, maxIterations, tol, compute_all_H_all_fields, fields)
 
 
 # set up data logger

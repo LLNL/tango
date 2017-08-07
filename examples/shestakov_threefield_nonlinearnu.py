@@ -25,9 +25,6 @@ import scipy
 import tango.tango_logging as tlog
 import tango
 import tango.analysis
-import tango.lodestro_method_multifield
-import tango.solver_multifield
-import tango.multifield
 import tango.derivatives
 
 def initialize_shestakov_problem():
@@ -56,11 +53,10 @@ def initialize_parameters():
 class ShestakovThreeFieldFluxModel(object):
     def __init__(self, dx):
         self.dx = dx
-    def get_flux(self, profileArray):
-        n = profileArray[0, :]
-        pi = profileArray[1, :]
-        pe = profileArray[2, :]
-        fluxes = np.zeros_like(profileArray)
+    def get_flux(self, profiles):
+        n = profiles['n']
+        pi = profiles['pi']
+        pe = profiles['pe']
     
         # Return flux Gamma on the same grid as n
         dndx = tango.derivatives.dx_centered_difference_edge_first_order(n, dx)
@@ -71,9 +67,10 @@ class ShestakovThreeFieldFluxModel(object):
         Qi = -D * dpidx
         Qe = -D * dpedx
         
-        fluxes[0, :] = Gamma
-        fluxes[1, :] = Qi
-        fluxes[2, :] = Qe
+        fluxes = {}
+        fluxes['n'] = Gamma
+        fluxes['pi'] = Qi
+        fluxes['pe'] = Qe
         return fluxes
 
 def source_n(x, S0=8, delta=0.3):
@@ -183,17 +180,17 @@ labels = [label0, label1, label2]
 
 # set up for n
 compute_all_H_n = ComputeAllH_n()
-lm_n = tango.lodestro_method_multifield.lm(lmParams['EWMAParamTurbFlux'], lmParams['EWMAParamProfile'], lmParams['thetaParams'])
+lm_n = tango.lodestro_method.lm(lmParams['EWMAParamTurbFlux'], lmParams['EWMAParamProfile'], lmParams['thetaParams'])
 field0 = tango.multifield.Field(label=label0, rightBC=n_L, profile_mminus1=n_IC, compute_all_H=compute_all_H_n, lodestroMethod=lm_n)
 
 # set up for pi
 compute_all_H_pi = ComputeAllH_pi(nu0)
-lm_pi = tango.lodestro_method_multifield.lm(lmParams['EWMAParamTurbFlux'], lmParams['EWMAParamProfile'], lmParams['thetaParams'])
+lm_pi = tango.lodestro_method.lm(lmParams['EWMAParamTurbFlux'], lmParams['EWMAParamProfile'], lmParams['thetaParams'])
 field1 = tango.multifield.Field(label=label1, rightBC=pi_L, profile_mminus1=pi_IC, compute_all_H=compute_all_H_pi, lodestroMethod=lm_pi, coupledTo='pe')
 
 # set up for pe
 compute_all_H_pe = ComputeAllH_pe(nu0)
-lm_pe = tango.lodestro_method_multifield.lm(lmParams['EWMAParamTurbFlux'], lmParams['EWMAParamProfile'], lmParams['thetaParams'])
+lm_pe = tango.lodestro_method.lm(lmParams['EWMAParamTurbFlux'], lmParams['EWMAParamProfile'], lmParams['thetaParams'])
 field2 = tango.multifield.Field(label=label2, rightBC=pe_L, profile_mminus1=pe_IC, compute_all_H=compute_all_H_pe, lodestroMethod=lm_pe, coupledTo='pi')
 
 # combine fields and do checking
@@ -202,14 +199,14 @@ tango.multifield.check_fields_initialize(fields)
 
 # create the flux model and the turbulence handler
 fluxModel = ShestakovThreeFieldFluxModel(dx)
-turbHandler = tango.lodestro_method_multifield.TurbulenceHandlerMultifield(dx, x, fluxModel, labels, labels)
+turbHandler = tango.lodestro_method.TurbulenceHandler(dx, x, fluxModel)
 compute_all_H_all_fields = tango.multifield.ComputeAllHAllFields(fields, turbHandler)
 
 
 tArray = np.array([0, 1e6])  # specify the timesteps to be used.
 
 # initialize the solver
-solver = tango.solver_multifield.Solver(L, x, tArray, maxIterations, tol, compute_all_H_all_fields, fields)
+solver = tango.solver.Solver(L, x, tArray, maxIterations, tol, compute_all_H_all_fields, fields)
 
 
 # set up data logger
@@ -264,10 +261,10 @@ plt.ylabel('pe')
 plt.legend(handles=[line1])
 
 
-fluxes = fluxModel.get_flux(np.array((n, pi, pe)))
-Gamma = fluxes[0, :]
-Qi = fluxes[1, :]
-Qe = fluxes[2, :]
+fluxes = fluxModel.get_flux(solver.profiles)
+Gamma = fluxes['n']
+Qi = fluxes['pi']
+Qe = fluxes['pe']
 
 RHSn = source_n(x)
 RHSi = source_i(x) - calc_nu(nu0, n, pi, pe) * (pi - pe)

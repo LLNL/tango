@@ -1,39 +1,7 @@
 """
-tango_fields
+multifield
 
-define class that is used as the base representation for a "field" in Tango.  
-
-# I need to pin down a data structure that 
-
-# a couple ways for the user to specify the fields
-#  one:  
-    
-    
-    
-    # two: kinda like GENE.  Add fields one-by-one (or two-by-two if coupled) and give all the pertinent information for a given field
-    
-    
-# another property coupledTo.  None, or a label
-#  then, write a function to figure out the coupling.  I guess in Solver
-
-
-add_field(
-  label='ions',
-  coupledTo=None,
-  compute_H=compute_H_ions,
-  rightBC=1
-  profile_mminus1=zeros
-  )
-
-
-compute_all_H_singlefield should TAKE IN THE TURBULENT FLUX AS AN INPUT.  Then compute_all_H_all_fields (constructed by fieldList.finalize) computes the turbulent flux ONCE,
-maps the flux to a dict, then iterates through the fields to compute_all_H, and gives as input to each one the flux.
-
-TurbHandler / LodestroMethod classes
-    --restructure?
-    --keeping current structures, have one instance per field.  THIS MAKES SENSE FOR WHAT I WANT TO DO.
-    --alternative structure: one instance for flux,  one instance for profiles.
-    
+Define class that is used as the base representation for a "field" in Tango.      
 """
 from __future__ import division
 import numpy as np

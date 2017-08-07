@@ -22,60 +22,49 @@ See https://github.com/LLNL/tango for copyright and license information
 
 from __future__ import division
 import numpy as np
+
 from . import derivatives
+from . import multifield
+
 
 class TurbulenceHandler(object):
-    """This class acts as an interface to underlying packages for the Lodestro Method, a model 
-    for turbulent flux, and moving between transport and turbulence grids (if necessary).
+    """    
+    This class acts as a high-level interface to effect the LoDestro Method.
 
     The class is designed to be flexible and accept as given a model to compute the turbulent
     flux.  In principle, this model could be analytic or based on a turbulence code.  The
-    requirement is that it be given as the input fluxModel and have a get_flux() method.
+    requirement is that it be given as the input fluxModel and have a get_flux() method.  The
+    get_flux() method must take the input profiles as a dict (arrays accessed by label) and return
+    the turbulent fluxes as a dict (accessed by the same labels, corresponding to their associated
+    conserved quantity).
     
     Since the class provides the H coefficients, and not simply diffusion coefficients, it must
     be aware of the coordinate geometric factor V' = dV/dpsi.
     """
-    def __init__(self, dxTurbGrid, x, lmParams, fluxModel, gridMapper=None, VprimeTango=None, fluxSmoother=None):
+    def __init__(self, dxTurbGrid, xTango, fluxModel, VprimeTango=None, fluxSmoother=None):
         """A geometric factor Vprime may be optionally provided to the constructor.  This 
             geometric factor is essentially a Jacobian and appears in transport equations
             in non-Cartesian geometry.  It typically appears in the form
-                        dn/dt = 1/V' * d/dpsi(V' Gamma) + ...  
+                        dn/dt = 1/V' * d/dx (V' Gamma) + ...  
             For example, in polar coordinates where r is the flux label, V' is proportional
             to r.  If Vprime is not provided, Cartesian geometry is assumed, where V' = 1.
     
-            Here, Vprime = dV/psi.  The flux coordinate psi does not have to be the poloidal
-            flux function; any flux label is valid.
+            Here, Vprime = dV/dx.
             
             Inputs:
-              dxTurbGrid                grid spacing for independent variable x on the turbulence grid [sometimes referred to in
-                                            the documentation as psi] (scalar)
-              x                         independent variable x on the transport grid (array)
-              lmParams                  parameters to be used by the lodestro method (dict)
-                                            --> EWMAParamTurbFlux, EWMAParamProfile, thetaParams
+              dxTurbGrid                grid spacing for independent variable x on the turbulence grid (scalar)
+              xTango                    independent variable x on the transport grid (array)
               fluxModel                 object with a get_flux() method that provides turbulent flux
-                                            get_flux() accepts the profile on the turbulence grid and returns
-                                            the turbulent flux on the turbulence grid
-              gridMapper                (optional) object for transforming the profiles and transport coefficients
-                                        between the transport grid and the grid used to compute turbulent fluxes
-                                            See interfacegrids_gene.py
-                                            default: None [same grid for transport and turbulence]
+                                            get_flux() accepts the profiles (as a dict) on the turbulence grid and returns
+                                            the turbulent fluxes (as a dict) on the turbulence grid
               VprimeTango (optional)    geometric coefficients dV/dpsi depending on coordinate system, on the transport grid (array)
                                             default: None [V'=1 everywhere]
               fluxSmoother (optional)   object with a smooth() method to spatially smooth the turbulent flux. 
         """
         self.dxTurbGrid = dxTurbGrid
-        self.x = x
-        self.lodestroMethod = lm(lmParams['EWMAParamTurbFlux'], lmParams['EWMAParamProfile'], lmParams['thetaParams'])
-        
+        self.xTango = xTango        
         self.fluxModel = fluxModel
         assert hasattr(fluxModel, 'get_flux') and callable(getattr(fluxModel, 'get_flux'))
-        
-        if gridMapper is not None:
-            assert hasattr(gridMapper, 'map_profile_onto_turb_grid') and callable(getattr(gridMapper, 'map_profile_onto_turb_grid'))
-            assert hasattr(gridMapper, 'map_transport_coeffs_onto_transport_grid') and callable(getattr(gridMapper, 'map_transport_coeffs_onto_transport_grid'))
-            self.gridMapper = gridMapper
-        else:
-            self.gridMapper = GridsNull(x)
         
         if VprimeTango is not None:
             self.VprimeTango = VprimeTango
@@ -90,102 +79,68 @@ class TurbulenceHandler(object):
         else:
             self.doSmoothing = False
             
+    def turbflux_to_Hcoeffs_multifield(self, fields, profiles):
+        """Compute the turbulent fluxes and transform to effective transport (H) coefficients.
         
-    def Hcontrib_turbulent_flux(self, profile):
-        """Given the lth iterate of a profile (e.g., n), perform all the steps necessary to
-        calculate the contributions to the transport equation.  This involves using the
-        LoDestro Method to average over iterates, the fluxModel to compute a turbulent flux,
-        and the LoDestro Method to transform the flux into transport coefficients.  Additionally,
-        any necessary transformations between the quantities on the transport grid and the
-        quantities on the turbulence grid are also handled.
-         
+        
         Inputs:
-          profile           (array)
-        
+          fields                    collection of fields (list)
+          profiles                  collection of profiles, accessed by label (dict)
         Outputs:
-          H2contrib         array
-          H3contrib         array
-          data              other data
+          HCoeffsTurbAllFields      collection of HCoefficients, accessed by label, containing the contributions from turbulence (dict)
+          extradataAllFields        extra data that might be useful for debugging or data analysis (dict)
         """
-        # map the profile from the transport grid onto the turbulence grid
-        profileTurbGrid = self.gridMapper.map_profile_onto_turb_grid(profile)
         
-        # calculate the next iterate of the relaxed profile using EWMA
-        profileEWMATurbGrid = self.lodestroMethod.ewma_profile(profileTurbGrid) # could also reverse the order of this and the previous step...
+        # map profiles to turbulence grid, and compute next EWMA iterate of profiles
+        profilesTurbGrid = {}
+        profilesEWMATurbGrid = {}
+        for field in fields:
+            label = field.label
+            profileTurbGrid = field.gridMapper.map_profile_onto_turb_grid(profiles[label])
+            profileEWMATurbGrid = field.lodestroMethod.ewma_profile(profileTurbGrid)
+            profilesEWMATurbGrid[label] = profileEWMATurbGrid
+            profilesTurbGrid[label] = profileTurbGrid
+            
+        # get next turbulent flux
+        fluxesTurbGrid = self.fluxModel.get_flux(profilesEWMATurbGrid)
         
-        # calculate the next sample of flux as a function of space
-        fluxTurbGrid = self.fluxModel.get_flux(profileEWMATurbGrid)
-        
-        # spatially smooth the flux, if specified
-        if self.doSmoothing:
-            smoothedFluxTurbGrid = self.fluxSmoother.smooth(fluxTurbGrid)
-        else:
-            smoothedFluxTurbGrid = fluxTurbGrid
-        
-        # calculate the next iterate of relaxed flux using EWMA
-        fluxEWMATurbGrid = self.lodestroMethod.ewma_turb_flux(smoothedFluxTurbGrid)
-        
-        # Convert the flux into effective transport coefficients
-        (DTurbGrid, cTurbGrid, DcDataTurbGrid) = self.lodestroMethod.flux_to_transport_coeffs(fluxEWMATurbGrid, profileEWMATurbGrid, self.dxTurbGrid)
-        
-        # Map the transport coefficients from the turbulence grid back to the transport grid
-        (D, c) = self.gridMapper.map_transport_coeffs_onto_transport_grid(DTurbGrid, cTurbGrid)
-        (H2contrib, H3contrib) = self.Dc_to_Hcontrib(D, c)
-        
-        # Other data that may be useful for debugging or data analysis purposes
-        x = self.gridMapper.get_x_transport_grid()        
-        xTurbGrid = self.gridMapper.get_x_turbulence_grid()
-        data = {'x': x, 'xTurbGrid': xTurbGrid,
+        # Loop over fields and transform flux into effective transport coefficients
+        #  initialize dicts
+        HCoeffsTurbAllFields = {}
+        extradataAllFields = {}
+        for field in fields:
+            label = field.label
+            # spatially smooth the flux, if specified
+            if self.doSmoothing:
+                smoothedFluxTurbGrid = self.fluxSmoother.smooth(fluxesTurbGrid[label])
+            else:
+                smoothedFluxTurbGrid = fluxesTurbGrid[label]
+                        
+            # calculate the next iterate of relaxed flux using EWMA
+            fluxEWMATurbGrid = field.lodestroMethod.ewma_turb_flux(smoothedFluxTurbGrid)                
+            
+            # Convert the flux into effective transport coefficients
+            (DTurbGrid, cTurbGrid, DcDataTurbGrid) = field.lodestroMethod.flux_to_transport_coeffs(fluxEWMATurbGrid, profilesEWMATurbGrid[label], self.dxTurbGrid)
+            
+            # Map the transport coefficients from the turbulence grid back to the transport grid
+            (D, c) = field.gridMapper.map_transport_coeffs_onto_transport_grid(DTurbGrid, cTurbGrid)
+            (H2contrib, H3contrib) = self.Dc_to_Hcontrib(D, c)
+            HCoeffsTurb = multifield.HCoefficients(H2=H2contrib, H3=H3contrib)
+            HCoeffsTurbAllFields[label] = HCoeffsTurb
+            # Other data that may be useful for debugging or data analysis purposes
+            extradataAllFields[label] = {
                 'D': D, 'c': c,
-                'profileTurbGrid': profileTurbGrid, 'profileEWMATurbGrid': profileEWMATurbGrid,
-                'fluxTurbGrid': fluxTurbGrid, 'smoothedFluxTurbGrid': smoothedFluxTurbGrid, 'fluxEWMATurbGrid': fluxEWMATurbGrid,
+                'profileTurbGrid': profilesTurbGrid[label], 'profileEWMATurbGrid': profilesEWMATurbGrid[label],
+                'fluxTurbGrid': fluxesTurbGrid[label], 'smoothedFluxTurbGrid': smoothedFluxTurbGrid, 'fluxEWMATurbGrid': fluxEWMATurbGrid,
                 'DTurbGrid': DTurbGrid, 'cTurbGrid': cTurbGrid,
                 'DHatTurbGrid': DcDataTurbGrid['DHat'], 'cHatTurbGrid': DcDataTurbGrid['cHat'], 'thetaTurbGrid': DcDataTurbGrid['theta']}
-        return (H2contrib, H3contrib, data)
-    
-    def get_ewma_params(self):
-        """Return the EWMA parameter for turbulent flux and the profile, respectively.
-
-        Outputs:
-          EWMAParamTurbFlux    (scalar)
-          EWMAParamProfile     (scalar)
-        """
-        (EWMAParamTurbFlux, EWMAParamProfile) = self.lodestroMethod.get_ewma_params()
-        return (EWMAParamTurbFlux, EWMAParamProfile)
-    
-    def set_ewma_params(self, EWMAParamTurbFlux, EWMAParamProfile):
-        """Set new values for the EWMA parameter for the turbulent flux and the profile.
         
-        Inputs:
-          EWMAParamTurbFlux     (scalar)
-          EWMAParamProfile      (scalar)
-        """
-        self.lodestroMethod.set_ewma_params(EWMAParamTurbFlux, EWMAParamProfile)
-    
-    def restore_ewma_from_checkpoint(self, profileEWMA, turbFluxEWMA):
-        """Restore the EWMA iterates for both profile and turbulent flux from a checkpoint.
-        
-        Needed to fully restore Tango from a checkpoint.
-        Inputs:
-          profileEWMA       input profile EWMA (1D array)
-          turbFluxEWMA      input turbulent flux EWMA (1D array)
-        """
-        self.lodestroMethod.set_ewma_iterates(profileEWMA, turbFluxEWMA)
-        
-    def seed_EWMA_turb_flux(self, turbFluxEWMA):
-        """Seed the EWMA iterate for the turbulent flux by providing a specified value.
-        
-        If the turbulent flux is not seeded, then by default the value in the first iteration itself is used as the seed value. This can
-        lead to erratic behavior in the first few iterations because the turbulent flux in the first iteration is not necessarily "good"
-        if it is not averaged over a long time.  If a longer run (say, to set the initial point) has been completed, then the averaged
-        flux from that run is likely to be a better seed for the EWMA iterate.  While this seeding is not necessary, it may
-        converge faster, and should probably be used.
-        
-        Inputs:
-          turbFluxEWMA      input data (1D array)
-        """
-        self.lodestroMethod.set_ewma_turb_flux(turbFluxEWMA)
-        
+            # other data to save??
+#           x = self.gridMapper.get_x_transport_grid()        
+#           xTurbGrid = self.gridMapper.get_x_turbulence_grid()
+            
+        return (HCoeffsTurbAllFields, extradataAllFields)
+            
     def Dc_to_Hcontrib(self, D, c):
         """Transform the effective diffusion coefficient D and effective convective velocity c
         into the contributions to the H coefficients for the iteration-update solver for the
@@ -193,7 +148,7 @@ class TurbulenceHandler(object):
                 3/2 V' dp/dt - d/dpsi[ V' D dp/dpsi - V'c p] + ...
         Hence, H2 = V'*D  and  H3 = -V'*c.
         """
-        #  Should change this to use the physics_to_H module
+        #  Could change this to use the physics_to_H module
         #     H2contrib = physics_to_H.GeometrizedDiffusionCoeffToH(D, Vprime)
         #     H3contrib = physics_to_H.GeometrizedConvectionCoeffToH(c, Vprime):
         if self.isNonCartesian == True:
@@ -205,7 +160,6 @@ class TurbulenceHandler(object):
         else:
             raise RuntimeError('Invalid value for isNonCartesian.')
         return (H2contrib, H3contrib)
-    
         
         
 class lm(object):

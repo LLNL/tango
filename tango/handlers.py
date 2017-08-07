@@ -8,6 +8,7 @@ See https://github.com/LLNL/tango for copyright and license information
 
 from __future__ import division
 import numpy as np
+import h5py
 import shutil
 import os
 
@@ -62,14 +63,14 @@ class Executor(object):
         for handler in self.handlers:
             handler.reset_for_next_timestep()
             
-    def set_parallel_environment(self, parallelEnvironment, MPIrank):
+    def set_parallel_environment(self, parallel=False, MPIrank=0):
         """Set the parameters in a parallel environment.
         
         Inputs:
-          parallelEnvironment   True when in a parallel environment (Boolean)
-          MPIrank               rank returned from GENE (integer)
+          parallel              True when in a parallel environment (Boolean)
+          MPIrank               MPI rank of the process (integer)
         """
-        self.parallelEnvironment = parallelEnvironment
+        self.parallelEnvironment = parallel
         self.MPIrank = MPIrank
         
     def serial_or_rank0(self):
@@ -95,7 +96,7 @@ class Handler(object):
     """
     def __init__(self, iterationInterval=np.inf):
         self.iterationInterval = iterationInterval
-        self.lastIterationDivisor = 0
+        self.lastIterationDivisor = -1  # -1 ensures the first iteration (iterationNumber==0) is saved.
         
     def execute(self, data, iterationNumber):
         """Subclasses must implement this.
@@ -174,49 +175,11 @@ class SaveGeneOutputHandler(Handler):
         """
         return geneFilename.rsplit('_', 1)[0]
 
-class TangoCheckpointHandler(Handler):
-    """Handler for writing out a checkpoint for Tango.
-    
-    Print two files, both in ASCII: Using the default basename=tango_checkpoint, these are
-      tango_checkpoint_prof.txt and tango_checkpoint_ewma.txt.  The previous checkpoint is
-      overwritten whenever a new checkpoint is written.
-        
-        tango_checkpoint_prof.txt consists of:
-          Header: current iteration number
-          1st column: tango radial grid
-          2nd column: pressure profile
-         
-        tango_checkpoint_ewma.txt consists of:
-          1st column: turbulence radial grid
-          2nd column: relaxed pressure profile (EWMA) on the turbulence grid
-          3rd column: relaxed turbulent heat flux profile (EWMA) on the turbulence grid
-    """
-    def __init__(self, iterationInterval=np.inf, basename='tango_checkpoint'):
-        """blah"""
-        Handler.__init__(self, iterationInterval)
-        
-        # add checking of filename?
-        self.basename = basename
-        
-    def execute(self, data, iterationNumber):
-        """Print out the essential data to restart a Tango run."""
-        filename_prof = self.basename + '_prof.txt'
-        xTango = data['x']
-        pressureProfile = data['profile']
-        np.savetxt(filename_prof, np.transpose([xTango, pressureProfile]), header=str(iterationNumber))
-        
-        filename_ewma = self.basename + '_ewma.txt'
-        xTurbGrid = data['xTurbGrid']
-        profileEWMATurbGrid = data['profileEWMATurbGrid']
-        fluxEWMATurbGrid = data['fluxEWMATurbGrid']
-        np.savetxt(filename_ewma, np.transpose([xTurbGrid, profileEWMATurbGrid, fluxEWMATurbGrid]))
-    
+
 class TangoHistoryHandler(Handler):
-    """Handler for incrementally saving the iteration history, to preserve data in case the simulation crashes.
+    """Handler for incrementally saving the iteration history.
     
-    Each time the Handler is executed, add the complete data dict into internal memory.  Save to <basename>.npz,
-    overwriting any previous <basename>.npz.  At the first interval, one iteration's worth of data is saved.  At
-    the second interval, two iterations' worth of data is saved, and so on.  Default basename=tango_history.
+    Each time the Handler is executed, the data is added to the output h5 file.  Default basename=tango_history.
     
     This Handler is intended to save the iterations within a timestep, not across multiple timesteps.
     
@@ -224,90 +187,129 @@ class TangoHistoryHandler(Handler):
     and DataSaver allows the user to specify a subset of data to save.  DataSaver also by default saves the data
     from every iteration rather than every N iterations.
     """
-    def __init__(self, iterationInterval=np.inf, basename='tango_history', maxIterations=9000):
+    def __init__(self, iterationInterval=np.inf, basename='tangodata', maxIterations=9000, initialData=None):
         """
         Inputs:
           iterationInterval     interval for executing the Handler's task (integer)
           basename              base of filename to save data to (string)
           maxIterations         maximum number of iterations Tango will use per timestep (integer)
+          initialDta            initial data to save at the beginning... dict with same hierarchical structure as the hdf5 file. (dict)
+                                   Must have the attribute 'setNumber', referring to which set in a given Tango run this is (int)
         """
         Handler.__init__(self, iterationInterval)
         
-        # add checking of filename?
         self.basename = basename
         self.maxCount = 1 + maxIterations // iterationInterval   # maximum number of iterations to store
+        self.initialData = initialData
+        
+        self.setNumber = initialData['setNumber']
+        self.filename = basename + '_s{}'.format(self.setNumber) + '.hdf5'
         
         # initialize data storage
         self.countStoredIterations = 0    # how many iterations have been stored so far
-        self.iterationNumber = np.zeros(self.maxCount)
-        self.data1D = {}
-        self.data0D = {}
+        # create a new hdf5 file
+        self._create_file(initialData)
     
     def execute(self, data, iterationNumber):
-        # add the data to internal storage
-        self.add_data(data, iterationNumber)
-        
-        # save data to disk
-        (data0D, data1D) = self.prepare_to_write_data()
-        self.save_to_file(data0D, data1D)
+        # open the hdf5 file and store the data
+        with self._get_file() as f:
+            if self.countStoredIterations == 0:
+                self._initialize_datasets_on_first_use(f, data)
+            # set the root data & metadata that updates each iteration
+            index = self.countStoredIterations
+            
+            # save the 0D field data that updates each iteration
+            varNames = (label for label in data if not isinstance(data[label], dict))
+            for varName in varNames:
+                dset = f[varName]
+                dset.resize(index + 1, axis=0)
+                dset[index] = data[varName]
+            
+            # save the 1D field data that updates each iteration.
+            fieldlabels = (label for label in data if isinstance(data[label], dict))
+            for label in fieldlabels:
+                fielddata = data[label]
+                for varName in fielddata:  # loop through keys of the data for a given field
+                    dsetName = '/'.join((label, varName))
+                    dset = f[dsetName]
+                    dset.resize(index + 1, axis=0)
+                    dset[index, :] = fielddata[varName]
+                    
+            # finish up
+            self.countStoredIterations += 1
+            f.attrs['writes'] = self.countStoredIterations
     
-    def add_data(self, data, iterationNumber):
-        """Add the data to the internal storage
+        
+    def _get_file(self):
+        """return the opened hdf5 file.  assume file is already created."""
+        return h5py.File(self.filename, 'a')
+        
+    def _create_file(self, initialData):
+        """Create the hdf5, create the groups, and store some initial metadata.
         
         Inputs:
-          data             dict with a bunch of data (1D arrays and scalars)
-          iterationNumber  iteration number l within a timestep (scalar)
+          initialdata       dict with items to save, in the same structure as to be saved in the hdf5 file (dict)
         """
-        self.iterationNumber[self.countStoredIterations] = iterationNumber
-        for varName in data: # loop through keys
-            if np.size(data[varName]) > 1:   # 1D arrays... assume nothing 2D or higher
-                # initialize storage on first use
-                if self.countStoredIterations==0:  
-                    Npts = len(data[varName])
-                    self.data1D[varName] = np.zeros((self.maxCount, Npts))
-                
-                # save the data into the container
-                self.data1D[varName][self.countStoredIterations, :] = data[varName]
-            elif np.size(data[varName]) == 1:   # scalars
-                # initialize storage on first use
-                if self.countStoredIterations==0:
-                    self.data0D[varName] = np.zeros(self.maxCount)
-                
-                # save the data into the container
-                self.data0D[varName][self.countStoredIterations] = data[varName]
-        self.countStoredIterations += 1
-    
-    def prepare_to_write_data(self):
-        """Copy data to a separate dict and remove unused elements of the data (the preallocated memory)"""
-        iterationNumberReduced = self.iterationNumber[0:self.countStoredIterations]
-        data1DReduced = {}
-        data0DReduced = {}
-        for arrayName in self.data1D:
-            data1DReduced[arrayName] = self.data1D[arrayName][0:self.countStoredIterations, :]
-        for varName in self.data0D:
-            data0DReduced[varName] = self.data0D[varName][0:self.countStoredIterations]
-        data0DReduced['iterationNumber'] = iterationNumberReduced
-        return (data0DReduced, data1DReduced)
-    
-    def save_to_file(self, data0D, data1D):
-        """Save the data to disk.
+        # create file
+        with h5py.File(self.filename, "w") as f:   # use mode w to overwrite and mode w- to fail if file exists
+            # store initial metadata
+            varNamesAtRoot = (varName for varName in initialData if not isinstance(initialData[varName], dict))
+            for varName in varNamesAtRoot:
+                f.attrs[varName] = initialData[varName]
+            
+            fieldlabels = (label for label in initialData if isinstance(initialData[label], dict))
+            for label in fieldlabels:
+                # create the group for each field
+                grp = f.create_group(label)
+                fieldData = initialData[label]
+                for varName in fieldData:  # loop through keys of the data for a given field
+                    grp.attrs[varName] = fieldData[varName]
         
-        Save two files: 
-          The first file (ending in _timestep) is for the data that is for 0D data that changes on iterations (e.g., rms error)
-          The second file (ending in _iterations) is for the 1D data that changes each iteration (e.g., H2, profile)
+    def _initialize_datasets_on_first_use(self, f, data):
+        """Called on the first run of execute() to create the datasets.
+        
+        Inputs:
+          f         an open hdf5 file
+          data      dict containing all the data
         """
-        # save data whole-timestep data
-        filename_timestep = self.basename + "_timestep"
-        np.savez(filename_timestep, **data0D)
+        # create the datasets for the 0D field data that updates each iteration
+        varNamesAtRoot = (varName for varName in data if not isinstance(data[varName], dict))
+        for varName in varNamesAtRoot:
+            if isinstance(data[varName], np.int):
+                f.create_dataset(varName, (0,), maxshape=(self.maxCount,), dtype=np.int)
+            else: # assume float
+                f.create_dataset(varName, (0,), maxshape=(self.maxCount,), dtype=np.float64)
         
-        # save 1D data that changes each iteration
-        filename_iterations = self.basename + "_iterations"
-        np.savez(filename_iterations, **data1D)
-        
+        # create the datasets for the 1D field data that updates each iteration... these exist inside dicts for each field.
+        fieldlabels = (label for label in data if isinstance(data[label], dict))
+        for label in fieldlabels:
+            fielddata = data[label]
+            for varName in fielddata:  # loop through keys of the data for a given field
+                dsetName = '/'.join((label, varName))
+                Npts = len(fielddata[varName])
+                # assume float type
+                f.create_dataset(dsetName, (0, Npts), maxshape=(self.maxCount, Npts), dtype=np.float64)
     
-    def reset_for_next_timestep(self):
-        """Reset to pristine status, for use in next timestep."""
-        self.countStoredIterations = 0
-        self.iterationNumber = np.zeros(self.maxCount)
-        self.data1D = {}
-        self.data0D = {}
+    @staticmethod
+    def set_up_initialdata(setNumber, xTango, xTurb, t, fields):
+        """Helper function to package up the initial data (used in the constructor of this handler)."""
+        initialData = {
+                'setNumber': setNumber,
+                'xTango': xTango,
+                'xTurb': xTurb,
+                't': t,
+                'timestepNumber': 1}
+        for field in fields:
+            (EWMAParamTurbFlux, EWMAParamProfile) = field.lodestroMethod.get_ewma_params()
+            initialData[field.label] = {
+                    'EWMAParamProfile': EWMAParamProfile,
+			'EWMAParamTurbFlux': EWMAParamTurbFlux,
+			'profile_mminus1': field.profile_mminus1}
+        return initialData
+    
+#    def reset_for_next_timestep(self):
+#        """Reset to pristine status, for use in next timestep.
+#        
+#        ****NOT READY FOR USE."""
+#        self.countStoredIterations = 0
+#        self.iterationNumber = np.zeros(self.maxCount)

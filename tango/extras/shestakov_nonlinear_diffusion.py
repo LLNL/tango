@@ -15,24 +15,27 @@ class AnalyticFluxModel(object):
     def __init__(self, dx):
         self.dx = dx
     
-    def get_flux(self, n):
-        return get_flux(n, self.dx)
+    def get_flux(self, profiles):
+        n = profiles['n']
+        flux = {}
+        flux['n'] = get_flux(n, self.dx)
+        return flux
 
-class shestakov_analytic_fluxmodel(object):
-    """Class-based interface to the flux model in the Shestakov analytic
-    test problem.
-    
-    Slight modification of boundary conditions so that n(1) = nL rather than n(1)=0,
-    in order to make the computation of the flux at the boundary much easier by
-    avoiding a divide by zero condition.
-    
-    Alias to AnalyticFluxModel which conforms to style guidleines.  This class is kept around for backwards compatibility reasons.
-    """
-    def __init__(self, dx):
-        self.dx = dx
-    
-    def get_flux(self, n):
-        return get_flux(n, self.dx)
+#class shestakov_analytic_fluxmodel(object):
+#    """Class-based interface to the flux model in the Shestakov analytic
+#    test problem.
+#    
+#    Slight modification of boundary conditions so that n(1) = nL rather than n(1)=0,
+#    in order to make the computation of the flux at the boundary much easier by
+#    avoiding a divide by zero condition.
+#    
+#    Alias to AnalyticFluxModel which conforms to style guidleines.  This class is kept around for backwards compatibility reasons.
+#    """
+#    def __init__(self, dx):
+#        self.dx = dx
+#    
+#    def get_flux(self, n):
+#        return get_flux(n, self.dx)
     
     
     

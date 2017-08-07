@@ -11,6 +11,7 @@ from __future__ import division, absolute_import
 import numpy as np
 import matplotlib
 import matplotlib.pyplot as plt
+import h5py
 
 import tango.tango_logging as tlog
 from tango.extras import shestakov_nonlinear_diffusion
@@ -78,17 +79,24 @@ tango.multifield.check_fields_initialize(fields)
 
 compute_all_H_all_fields = tango.multifield.ComputeAllHAllFields(fields, turbHandler)
 
-
 tArray = np.array([0, 1e4])  # specify the timesteps to be used.
 
+# set up handler
+setNumber = 0
+xTango = x
+xTurb = x
+t = tArray[1]
+initialData = tango.handlers.TangoHistoryHandler.set_up_initialdata(setNumber, xTango, xTurb, t, fields)
+basename = 'tangodata'
+tangoHistoryHandler = tango.handlers.TangoHistoryHandler(iterationInterval=1, basename=basename, maxIterations=maxIterations, initialData=initialData)
+filename = basename + '_s{}'.format(setNumber) + '.hdf5'
+
+# create solver
 solver = tango.solver.Solver(L, x, tArray, maxIterations, tol, compute_all_H_all_fields, fields)
+solver.fileHandlerExecutor.add_handler(tangoHistoryHandler)
+#  note: running a handler causes the solver to take much longer when using an analytic flux, because the limiting step becomes the opening & closing
+#  of the file on each iteration.
 
-
-# set up data logger
-#arraysToSave = ['H2', 'H3', 'profile']  # for list of possible arrays, see solver._pkgdata()
-#dataBasename = 'shestakov_solution_data'
-#solver.dataSaverHandler.initialize_datasaver(dataBasename, maxIterations, arraysToSave)
-#tlog.info("Preparing DataSaver to save files with prefix {}.".format(dataBasename))
 
 tlog.info("Initialization complete.")
 
@@ -99,6 +107,8 @@ while solver.ok:
     solver.take_timestep()
 
 n = solver.profiles[label]
+
+f = h5py.File(filename, 'r')
     
     
 #n = solver.profile  # finished solution
@@ -119,7 +129,7 @@ if solver.reachedEnd == True:
     print('The solution has been reached successfully.')
     print('Error compared to analytic steady state solution is %f' % (solutionRmsError))
 else:
-    print('The solver failed for some reason.')
+    print('The solver failed for some reason and did not reach the specified convergence tolerance.')
     print('Error at end compared to analytic steady state solution is %f' % (solutionRmsError))
 
 
