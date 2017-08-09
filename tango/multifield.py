@@ -5,74 +5,7 @@ Define class that is used as the base representation for a "field" in Tango.
 """
 from __future__ import division
 import numpy as np
-from collections import namedtuple
 
-# miscellaneous functions that will / could be useful
-#  this function refers to GENE, and should go in to GENEcomm
-#  [Actually, there is no explicit reference to GENE.  Nevertheless, this doesn't seem like the appropriate place]
-# Perhaps this should be a Function ?  Nah
-#   --*** Might as well put this into GENEcomm ??? Nah...  the labels only exist in Tango core, not the other flux computation.
-#   and for analytically specified functions, make it part of the Tango spec that fluxes come back in a dict, accessed by label.
-def flux_array_to_dict(fluxArray, fluxOrderedLabels):
-    """
-    Take the m x N array of output of flux from GENE (more precisely, GENEcomm) and turn it into a dict for access by label    
-    (where m is the number of flux outputs, N is the number of radial points)
-    
-    If m==1, the array is allowed to be a 1D array.
-    
-    The label should refer to the conserved quantity rather than the flux (i.e., 'ionpressure' rather than 'heat flux')
-    
-    For example, if the three rows of fluxArray are [particleflux; ionheatflux; electronheatflux], and the labels are 'density',
-        'ionpressure, 'electronpressure', then from the output, one accesses fluxDict['ionpressure'] to retrieve ionheatflux.
-    
-    Inputs:
-      fluxArray             Fluxes in array form, m x N (1D or 2D array)
-      fluxOrderedLabels     ordered list with labels for fluxes (list)
-                              --order must match fluxArray
-    Outputs:
-      fluxDict              Fluxes in dict form, accessed by label
-    """
-    fluxDict = {}
-    if len(fluxOrderedLabels) != 1:
-        for (j, label) in enumerate(fluxOrderedLabels):
-            fluxDict[label] = fluxArray[j, :]
-    else:
-        label = fluxOrderedLabels[0]
-        fluxDict[label] = fluxArray
-    return fluxDict
-    
-def profile_dict_to_array(profileDict, profileOrderedLabels):
-    """
-    Take the dict of profiles, accessed by label, and turn it into an m x N array.
-    (where m is the number of species, N is the number of radial points).
-    
-    If m==1, the output is a 1D array rather than a 2D array.
-    
-    For example, if profileDict is
-        {'density': density,
-         'electronpressure': electronpressure,
-         'ionpressure': ionpressure}
-    and orderedLabels is ['density', 'ionpressure', 'electronpressure'], then the output should be
-    
-    profileArray = 
-       np.array([density, ionpressure, electronpressure])
-    
-    Inputs:
-      profileDict               profiles in dict form, accessed by label (dict)
-      profileOrderedLabels      ordered list with labels for profiles (list)
-    Outputs:
-      profileArray              profiles in array form, m x N (1D or 2D array)
-    """
-    m = len(profileOrderedLabels)
-    N = len(profileDict[profileOrderedLabels[0]])
-    if m != 1:
-        profileArray = np.zeros((m, N))
-        for (j, label) in enumerate(profileOrderedLabels):
-            profileArray[j, :] = profileDict[label]
-    else:  # only 1 field; use a 1D array
-        label = profileOrderedLabels[0]
-        profileArray = profileDict[label]
-    return profileArray
 
 class Field(object):
     """representation of data for a "field".  Tango solves a transport equation for each field.    
@@ -221,27 +154,44 @@ class HCoefficients(object):
         
 
 # ComputeAllHAllFields that uses the individual compute_all_H_single_field (which is an attribute of the field)
-#  ew... do I want to assume that the LoDestro Method gets used?  This is not assumed by the 1-field version.
-#    Related question:  should this go into the solver or the user file?  Or a multifield / computeH file?
-# probably can go in multifield.py... or a compute_H.py file
 class ComputeAllHAllFields(object):
     def __init__(self, fields, turbhandler=None):
+        """Constructor.
+        
+        The default turbhandler=None is there as an option to allow the Tango machinery to be used even if the LoDestro method is not applied (that is,
+        turbulent fluxes are not transformed into effective diffusive & convective contributions).  While this should be uncommon, because the primary
+        purpose of Tango is to implement the LoDestro method, one may want to use Tango to solve linear diffusion equations, possibly for debugging or
+        verification purposes.
+        """
         self.fields = fields
         self.turbhandler = turbhandler
         
-    def __call__(self, t, x, profiles):
+    def __call__(self, t, x, profiles, computeTurbulence=True, HCoeffsTurbAllFields=None):
         """
+        The default computeTurbulence=True will call the fluxModel and compute new turbulent fluxes and transform these into new effective diffusive
+        and convective contributions (and HCoefficients).  However, by setting computeTurbulence=False, one can provide HCoefficients corresponding
+        to the turbulent contributions.  This is useful if one wants to implement an inner iteration loop, where an expensive turbulence simulation is
+        performed seldomly at the outer iteration loop, and other nonlinear terms that are faster to compute are converged in the inner iteration loop.
+        
         Inputs:
-          t                     value of time at which to evaluate the H (scalar)
-          x                     independent coordinate grid (array)
-          profiles              container of profiles, accessed by label (dict)
+          t                         value of time at which to evaluate the H (scalar)
+          x                         independent coordinate grid (array)
+          profiles                  container of profiles, accessed by label (dict)
+          computeTurbulence         If True, use the fluxModel to compute new turbulent fluxes.  If False, use the input HCoeffsTurbAllFields. (boolean)
+          HCoeffsTurbAllFields      used if computeTurbulence==True.  container of HCoeffs for the turbulent contribution, accessed by label (dict)
+        
         Outputs:
-          HCoeffsAllFields      container of HCoeffs, accessed by label (dict)
-          extradataAllFields    container for extra data that may be useful for debugging (dict)
+          HCoeffsAllFields          container of HCoeffs, accessed by label (dict)
+          HCoeffsTurbAllFieldsOut   container of HCoeffs for the turbulent contribution, accessed by label (dict)
+          extradataAllFields        container for extra data that may be useful for debugging (dict)
         """
-        # get the turbulent flux and transform into H coefficients
-        if self.turbhandler is not None:
-            (HCoeffsTurbAllFields, extradataAllFields) = self.turbhandler.turbflux_to_Hcoeffs_multifield(self.fields, profiles)
+        if computeTurbulence:
+            # get the turbulent flux and transform into H coefficients
+            if self.turbhandler is not None:
+                (HCoeffsTurbAllFields, extradataAllFields) = self.turbhandler.turbflux_to_Hcoeffs_multifield(self.fields, profiles)
+        else:
+            assert HCoeffsTurbAllFields is not None, 'must provide HCoeffsTurbAllFields when using computeTurbulence==False'
+            extradataAllFields = None
             
         # iterate through individual fields to compute the other H coefficients of each field and build up a dict
         HCoeffsAllFields = {}
@@ -251,42 +201,10 @@ class ComputeAllHAllFields(object):
             else:
                 HCoeffsAllFields[field.label] = field.compute_all_H(t, x, profiles)
             
-        return (HCoeffsAllFields, extradataAllFields)
+        return (HCoeffsAllFields, HCoeffsTurbAllFields, extradataAllFields)
+
         
 
-# example compute_all_H_single_field that would go in a driver script
-class ComputeAllHIonPressure(object):
-     def __init__(self, turbhandler, Vprime, minorRadius, majorRadius, A):
-        self.turbhandler = turbhandler
-        self.Vprime = Vprime
-        self.minorRadius = minorRadius
-        self.majorRadius = majorRadius
-        self.A = A
-        
-     def __call__(self, t, r, profiles, HCoeffsTurb):
-        """Define the contributions to the H coefficients
-        
-        Inputs:
-          t                 time (scalar)
-          r                 radial coordinate in SI (array)
-          profiles          container for profiles, accessed by label (dict)
-          HCoeffsTurb       turbulent contribution to ion heat flux
-        """
-        pressure = profiles['pressure']
-        H1 = 1.5 * self.Vprime
-        
-        # turbulent flux --- turbhandler now takes the flux itself as INPUT, rather than calling to compute it
-        #(H2_turb, H3_turb, extradata) = self.turbhandler.Hcontrib_turbulent_flux(pressure, ionHeatFluxTurb)
-        #other stuff
-        
-        # package it up in the data class and return
-        HCoeffs = HCoefficients(H1=H1, H7=H7)
-        HCoeffs = HCoeffs + HCoeffsTurb
-        return (HCoeffs, extradata)
-        
-        # return statement
-    
-        #return (H1, H2, H3, H4, H6, H7, extradata)
 
 class GridsNull(object):
     """Null class for moving between grids when the turbulence grid will be the same as the transport grid.

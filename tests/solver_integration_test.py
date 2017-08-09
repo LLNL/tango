@@ -4,6 +4,7 @@ from __future__ import division
 import numpy as np
 import os
 import h5py
+import scipy
 
 from tango.extras import shestakov_nonlinear_diffusion
 import tango
@@ -31,6 +32,142 @@ def test_solver_basic():
     testtol = 1e-3
     assert abs(obs - exp) < testtol
 
+def test_three_fields():
+    # test Tango with 3 coupled fields
+    L, N, dx, x, nL, n = initialize_shestakov_problem()
+
+    n_IC, pi_IC, pe_IC = 1.0*n, 1.0*n, 1.0*n
+    
+    n_L, pi_L, pe_L = 2, 0.1, 0.3    
+    nu0 = 2.2
+    maxIterations, lmParams, tol = initialize_parameters()
+    
+    label0, label1, label2 = 'n', 'pi', 'pe'
+    
+    # set up for n
+    compute_all_H_n = ComputeAllH_n()
+    lm_n = tango.lodestro_method.lm(lmParams['EWMAParamTurbFlux'], lmParams['EWMAParamProfile'], lmParams['thetaParams'])
+    field0 = tango.multifield.Field(label=label0, rightBC=n_L, profile_mminus1=n_IC, compute_all_H=compute_all_H_n, lodestroMethod=lm_n)
+    
+    # set up for pi
+    compute_all_H_pi = ComputeAllH_pi(nu0)
+    lm_pi = tango.lodestro_method.lm(lmParams['EWMAParamTurbFlux'], lmParams['EWMAParamProfile'], lmParams['thetaParams'])
+    field1 = tango.multifield.Field(label=label1, rightBC=pi_L, profile_mminus1=pi_IC, compute_all_H=compute_all_H_pi, lodestroMethod=lm_pi, coupledTo='pe')
+    
+    # set up for pe
+    compute_all_H_pe = ComputeAllH_pe(nu0)
+    lm_pe = tango.lodestro_method.lm(lmParams['EWMAParamTurbFlux'], lmParams['EWMAParamProfile'], lmParams['thetaParams'])
+    field2 = tango.multifield.Field(label=label2, rightBC=pe_L, profile_mminus1=pe_IC, compute_all_H=compute_all_H_pe, lodestroMethod=lm_pe, coupledTo='pi')
+    
+    # combine fields and do checking
+    fields = [field0, field1, field2]
+    tango.multifield.check_fields_initialize(fields)
+    
+    # create the flux model and the turbulence handler
+    fluxModel = ShestakovThreeFieldFluxModel(dx)
+    turbHandler = tango.lodestro_method.TurbulenceHandler(dx, x, fluxModel)
+    compute_all_H_all_fields = tango.multifield.ComputeAllHAllFields(fields, turbHandler)
+    
+    tArray = np.array([0, 1e6])  # specify the timesteps to be used.
+    
+    # initialize the solver
+    solver = tango.solver.Solver(L, x, tArray, maxIterations, tol, compute_all_H_all_fields, fields)
+    
+    while solver.ok:
+    # Implicit time advance: iterate to solve the nonlinear equation!
+        solver.take_timestep()
+
+    # do some checking
+    n = solver.profiles[label0]    
+    pi = solver.profiles[label1]
+    pe = solver.profiles[label2]
+    
+    fluxes = fluxModel.get_flux(solver.profiles)
+    Gamma = fluxes['n']
+    Qi = fluxes['pi']
+    Qe = fluxes['pe']
+    
+    RHSn = source_n(x)
+    RHSi = source_i(x) - calc_nu(nu0, n, pi, pe) * (pi - pe)
+    RHSe = source_e(x) - calc_nu(nu0, n, pi, pe) * (pe - pi)
+    
+    RHSn_integrated = scipy.integrate.cumtrapz(RHSn, x=x, initial=0)
+    RHSi_integrated = scipy.integrate.cumtrapz(RHSi, x=x, initial=0)
+    RHSe_integrated = scipy.integrate.cumtrapz(RHSe, x=x, initial=0)
+    
+    # check fluxes are close to what they should be
+    assert np.allclose(Gamma, RHSn_integrated, rtol=1e-2, atol=0.02)
+    assert np.allclose(Qi, RHSi_integrated, rtol=1e-2, atol=0.02)
+    assert np.allclose(Qe, RHSe_integrated, rtol=1e-2, atol=0.02)
+    
+def test_inner_iteration_loop():
+    # test Tango with 3 coupled fields and an inner iteration loop for nonlinear terms other than turbulent flux
+    L, N, dx, x, nL, n = initialize_shestakov_problem()
+
+    n_IC, pi_IC, pe_IC = 1.0*n, 1.0*n, 1.0*n
+    
+    n_L, pi_L, pe_L = 2, 0.1, 0.3    
+    nu0 = 2.2
+    maxIterations, lmParams, tol = initialize_parameters()
+    
+    label0, label1, label2 = 'n', 'pi', 'pe'
+    
+    # set up for n
+    compute_all_H_n = ComputeAllH_n()
+    lm_n = tango.lodestro_method.lm(lmParams['EWMAParamTurbFlux'], lmParams['EWMAParamProfile'], lmParams['thetaParams'])
+    field0 = tango.multifield.Field(label=label0, rightBC=n_L, profile_mminus1=n_IC, compute_all_H=compute_all_H_n, lodestroMethod=lm_n)
+    
+    # set up for pi
+    compute_all_H_pi = ComputeAllH_pi(nu0)
+    lm_pi = tango.lodestro_method.lm(lmParams['EWMAParamTurbFlux'], lmParams['EWMAParamProfile'], lmParams['thetaParams'])
+    field1 = tango.multifield.Field(label=label1, rightBC=pi_L, profile_mminus1=pi_IC, compute_all_H=compute_all_H_pi, lodestroMethod=lm_pi, coupledTo='pe')
+    
+    # set up for pe
+    compute_all_H_pe = ComputeAllH_pe(nu0)
+    lm_pe = tango.lodestro_method.lm(lmParams['EWMAParamTurbFlux'], lmParams['EWMAParamProfile'], lmParams['thetaParams'])
+    field2 = tango.multifield.Field(label=label2, rightBC=pe_L, profile_mminus1=pe_IC, compute_all_H=compute_all_H_pe, lodestroMethod=lm_pe, coupledTo='pi')
+    
+    # combine fields and do checking
+    fields = [field0, field1, field2]
+    tango.multifield.check_fields_initialize(fields)
+    
+    # create the flux model and the turbulence handler
+    fluxModel = ShestakovThreeFieldFluxModel(dx)
+    turbHandler = tango.lodestro_method.TurbulenceHandler(dx, x, fluxModel)
+    compute_all_H_all_fields = tango.multifield.ComputeAllHAllFields(fields, turbHandler)
+    
+    tArray = np.array([0, 1e6])  # specify the timesteps to be used.
+    
+    # initialize the solver
+    solver = tango.solver.Solver(L, x, tArray, maxIterations, tol, compute_all_H_all_fields, fields, useInnerIteration=True, innerIterationMaxCount=2)
+    
+    while solver.ok:
+    # Implicit time advance: iterate to solve the nonlinear equation!
+        solver.take_timestep()
+
+    # do some checking
+    n = solver.profiles[label0]    
+    pi = solver.profiles[label1]
+    pe = solver.profiles[label2]
+    
+    fluxes = fluxModel.get_flux(solver.profiles)
+    Gamma = fluxes['n']
+    Qi = fluxes['pi']
+    Qe = fluxes['pe']
+    
+    RHSn = source_n(x)
+    RHSi = source_i(x) - calc_nu(nu0, n, pi, pe) * (pi - pe)
+    RHSe = source_e(x) - calc_nu(nu0, n, pi, pe) * (pe - pi)
+    
+    RHSn_integrated = scipy.integrate.cumtrapz(RHSn, x=x, initial=0)
+    RHSi_integrated = scipy.integrate.cumtrapz(RHSi, x=x, initial=0)
+    RHSe_integrated = scipy.integrate.cumtrapz(RHSe, x=x, initial=0)
+    
+    # check fluxes are close to what they should be
+    assert np.allclose(Gamma, RHSn_integrated, rtol=1e-2, atol=0.02)
+    assert np.allclose(Qi, RHSi_integrated, rtol=1e-2, atol=0.02)
+    assert np.allclose(Qe, RHSe_integrated, rtol=1e-2, atol=0.02)    
+    
 #def test_solver_multiple_files():
 #    # test the use of solver class with data logger --- multiple files from multiple timesteps
 #    (L, N, dx, x, nL, n, maxIterations, tol, turbhandler, compute_all_H, t_array) = problem_setup()
@@ -233,3 +370,106 @@ class ComputeAllH(object):
 #        iterationNumber = solver.l
 #        if iterationNumber == 5:
 #            self.turbhandler.set_ewma_params(0.13, 0.13)
+
+#==============================================================================
+#    Helper functions for the three-field test
+#==============================================================================
+
+class ShestakovThreeFieldFluxModel(object):
+    def __init__(self, dx):
+        self.dx = dx
+    def get_flux(self, profiles):
+        n = profiles['n']
+        pi = profiles['pi']
+        pe = profiles['pe']
+    
+        # Return flux Gamma on the same grid as n
+        dndx = tango.derivatives.dx_centered_difference_edge_first_order(n, self.dx)
+        dpidx = tango.derivatives.dx_centered_difference_edge_first_order(pi, self.dx)
+        dpedx = tango.derivatives.dx_centered_difference_edge_first_order(pe, self.dx)
+        D = dpidx**2 / pi**2
+        Gamma = -D * dndx
+        Qi = -D * dpidx
+        Qe = -D * dpedx
+        
+        fluxes = {}
+        fluxes['n'] = Gamma
+        fluxes['pi'] = Qi
+        fluxes['pe'] = Qe
+        return fluxes
+
+def source_n(x, S0=8, delta=0.3):
+    """Return the source S_n."""
+    S = np.zeros_like(x)
+    S[x < delta] = S0
+    return S
+        
+def source_i(x, S0=1, delta=0.1):
+    """Return the source S_i."""
+    S = np.zeros_like(x)
+    S[x < delta] = S0
+    return S
+    
+def source_e(x, S0=3, delta=0.4):
+    """Return the source S_e."""
+    S = np.zeros_like(x)
+    ind = x < delta
+    S[ind] = S0 * x[ind]
+    return S
+    
+    
+class ComputeAllH_n(object):
+    def __call__(self, t, x, profiles, HCoeffsTurb):
+        #pi = profiles['pi']
+        #pe = profiles['pe']
+        #n = profiles['field0']
+        # Define the contributions to the H coefficients for the Shestakov Problem
+        H1 = np.ones_like(x)
+        H7 = source_n(x)
+        
+        HCoeffs = tango.multifield.HCoefficients(H1=H1, H7=H7)
+        HCoeffs = HCoeffs + HCoeffsTurb
+        return HCoeffs
+    
+def calc_nu(nu0, n, pi, pe):
+    nu = nu0 / (( pi/n + pe/n) ** (3/2) )
+    return nu
+        
+class ComputeAllH_pi(object):
+    def __init__(self, nu0):
+        self.nu0 = nu0
+    def __call__(self, t, x, profiles, HCoeffsTurb):
+        n = profiles['n']
+        pi = profiles['pi']
+        pe = profiles['pe']
+        #n = profiles['field0']
+        # Define the contributions to the H coefficients for the Shestakov Problem
+        H1 = np.ones_like(x)
+        H7 = source_i(x)
+        
+        nu = calc_nu(self.nu0, n, pi, pe)
+        H6 = -nu
+        H8 = nu
+        
+        HCoeffs = tango.multifield.HCoefficients(H1=H1, H6=H6, H7=H7, H8=H8)
+        HCoeffs = HCoeffs + HCoeffsTurb
+        return HCoeffs
+        
+class ComputeAllH_pe(object):
+    def __init__(self, nu0):
+        self.nu0 = nu0
+    def __call__(self, t, x, profiles, HCoeffsTurb):
+        n = profiles['n']
+        pi = profiles['pi']
+        pe = profiles['pe']
+        # Define the contributions to the H coefficients for the Shestakov Problem
+        H1 = np.ones_like(x)
+        H7 = source_e(x)
+        
+        nu = calc_nu(self.nu0, n, pi, pe)
+        H6 = -nu
+        H8 = nu
+        
+        HCoeffs = tango.multifield.HCoefficients(H1=H1, H6=H6, H7=H7, H8=H8)
+        HCoeffs = HCoeffs + HCoeffsTurb
+        return HCoeffs

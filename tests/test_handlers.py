@@ -220,18 +220,18 @@ def test_executor_add_handler():
     # setup
     executor = handlers.Executor()
     checkpointInterval = 10
-    checkpointHandler = handlers.TangoCheckpointHandler(iterationInterval=checkpointInterval)
-    historyInterval = 50
     maxIterations = 500
     initialData = {'setNumber': 0}
-    historyHandler = handlers.TangoHistoryHandler(iterationInterval=historyInterval, maxIterations=maxIterations, initialData=initialData)
-    executor.add_handler(checkpointHandler)
-    executor.add_handler(historyHandler)
+    historyHandler0 = handlers.TangoHistoryHandler(iterationInterval=checkpointInterval, maxIterations=maxIterations, initialData=initialData)
+    historyInterval = 50
+    historyHandler1 = handlers.TangoHistoryHandler(iterationInterval=historyInterval, maxIterations=maxIterations, initialData=initialData)
+    executor.add_handler(historyHandler0)
+    executor.add_handler(historyHandler1)
     
     # check
     assert len(executor.handlers) == 2
-    assert checkpointHandler in executor.handlers
-    assert historyHandler in executor.handlers
+    assert historyHandler0 in executor.handlers
+    assert historyHandler1 in executor.handlers
     
 def test_executor_scheduled_handlers():
     """test the Executor scheduled_handlers() method"""
@@ -239,32 +239,33 @@ def test_executor_scheduled_handlers():
     executor = handlers.Executor()
     checkpointInterval = 10
     historyInterval = 12
-    checkpointHandler = handlers.TangoCheckpointHandler(iterationInterval=checkpointInterval)    
     maxIterations = 500
     initialData = {'setNumber': 0}
-    historyHandler = handlers.TangoHistoryHandler(iterationInterval=historyInterval, maxIterations=maxIterations, initialData=initialData)
-    executor.add_handler(checkpointHandler)
-    executor.add_handler(historyHandler)
+    historyHandler0 = handlers.TangoHistoryHandler(iterationInterval=checkpointInterval, maxIterations=maxIterations, initialData=initialData)
+    initialData = {'setNumber': 0}
+    historyHandler1 = handlers.TangoHistoryHandler(iterationInterval=historyInterval, maxIterations=maxIterations, initialData=initialData)
+    executor.add_handler(historyHandler0)
+    executor.add_handler(historyHandler1)
     
     iterationNumber = 0
     scheduled = executor.scheduled_handlers(iterationNumber)
-    assert checkpointHandler in scheduled and historyHandler in scheduled
+    assert historyHandler0 in scheduled and historyHandler1 in scheduled
     
     iterationNumber = 9
     scheduled = executor.scheduled_handlers(iterationNumber)
-    assert checkpointHandler not in scheduled and historyHandler not in scheduled
+    assert historyHandler0 not in scheduled and historyHandler1 not in scheduled
     
     iterationNumber = 10
     scheduled = executor.scheduled_handlers(iterationNumber)
-    assert checkpointHandler in scheduled and historyHandler not in scheduled
+    assert historyHandler0 in scheduled and historyHandler1 not in scheduled
     
     # run with same iterationNumber, checkPoint should not be scheduled
     scheduled = executor.scheduled_handlers(iterationNumber)
-    assert checkpointHandler not in scheduled and historyHandler not in scheduled
+    assert historyHandler0 not in scheduled and historyHandler1 not in scheduled
     
     iterationNumber = 20
     scheduled = executor.scheduled_handlers(iterationNumber)
-    assert checkpointHandler in scheduled and historyHandler in scheduled
+    assert historyHandler0 in scheduled and historyHandler1 in scheduled
 
 
 #==============================================================================

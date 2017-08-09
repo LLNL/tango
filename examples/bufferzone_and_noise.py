@@ -8,14 +8,13 @@ present.
 
 from __future__ import division, absolute_import
 import numpy as np
+import matplotlib.pyplot as plt
+import h5py
 
 from tango.extras import shestakov_nonlinear_diffusion, bufferzone, noisyflux
-import tango as tng
-import matplotlib.pyplot as plt
-
-from tango import analysis
+import tango
 import tango.tango_logging as tlog
-tlog.setup(False, 0, tlog.INFO)        # when in a serial environment
+tlog.setup(parallel=False, rank=0, level=tlog.INFO)
 
 def initialize_shestakov_problem():
     # Problem Setup
@@ -37,7 +36,7 @@ def initialize_parameters():
     lmparams = {'EWMAParamTurbFlux': EWMA_param_turbflux,
             'EWMAParamProfile': EWMA_param_profile,
             'thetaParams': thetaparams}
-    tol = 1e-11  # tol for convergence... reached when a certain error < tol
+    tol = 1e-9  # tol for convergence... reached when a certain error < tol
     return (maxIterations, lmparams, tol)
 
 def source(x, S0=1):
@@ -51,33 +50,29 @@ def source(x, S0=1):
     
     
 class ComputeAllHNoBuffer(object):
-    def __init__(self, turbhandler):
-        self.turbhandler = turbhandler
-    def __call__(self, t, x, n):
+    def __init__(self):
+        pass
+    def __call__(self, t, x, profiles, HCoeffsTurb):
         # Define the contributions to the H coefficients for the Shestakov Problem
         H1 = np.ones_like(x)
         #H7 = shestakov_nonlinear_diffusion.H7contrib_Source(x)
         H7 = source(x)
-        (H2turb, H3, extradata) = self.turbhandler.Hcontrib_turbulent_flux(n)
-        H4 = None
-        H6 = None
+
         # add "other" diffusive contributions by specifying a diffusivity, H2 = V'D [but V' = 1 here]
         H2constdiff = 0.03
-        
-        H2 = H2turb + H2constdiff
-        return (H1, H2, H3, H4, H6, H7, extradata)
+        HCoeffs = tango.multifield.HCoefficients(H1=H1, H2=H2constdiff, H7=H7)
+        HCoeffs = HCoeffs + HCoeffsTurb
+        return HCoeffs
         
 class ComputeAllHWithBuffer(object):
-    def __init__(self, turbhandler):
-        self.turbhandler = turbhandler
-    def __call__(self, t, x, n):
+    def __init__(self):
+        pass
+    def __call__(self, t, x, profiles, HCoeffsTurb):
         # Define the contributions to the H coefficients for the Shestakov Problem
         H1 = np.ones_like(x)
         #H7 = shestakov_nonlinear_diffusion.H7contrib_Source(x)
         H7 = source(x)
-        (H2turb, H3, extradata) = self.turbhandler.Hcontrib_turbulent_flux(n)
-        H4 = None
-        H6 = None
+        
         # add "other" diffusive contributions by specifying a diffusivity, H2 = V'D [but V' = 1 here]
         H2constdiff = 0.03
         
@@ -88,30 +83,46 @@ class ComputeAllHWithBuffer(object):
             diffusivity[x > xr] = D0
             return diffusivity
         
-        H2 = H2turb + H2constdiff    
-        #H2 = H2turb + H2constdiff + diffusivity_right(x)   # if adding const to right edge
-        return (H1, H2, H3, H4, H6, H7, extradata)
+        # H2 = H2constdiff + diffusivity_right(x)   # if adding const to right edge
+        HCoeffs = tango.multifield.HCoefficients(H1=H1, H2=H2constdiff, H7=H7)
+        HCoeffs = HCoeffs + HCoeffsTurb
+        
+        return HCoeffs
         
 def regular_solution():
+    # get the regular solution with no buffer zone / extrapolation
     L, N, dx, x, nL, n = initialize_shestakov_problem()
-    maxIterations, lmparams, tol = initialize_parameters()
-    fluxModel = shestakov_nonlinear_diffusion.shestakov_analytic_fluxmodel(dx)
-    turbhandler = tng.lodestro_method.TurbulenceHandler(dx, x, lmparams, fluxModel)
-    t_array = np.array([0, 1e4])  # specify the timesteps to be used.
-    compute_all_H = ComputeAllHNoBuffer(turbhandler)
-    solver = tng.solver.Solver(L, x, n, nL, t_array, maxIterations, tol, compute_all_H, turbhandler)
-    arraysToSave = ['H2', 'H3', 'profile', 'fluxTurbGrid', 'xTurbGrid', 'DTurbGrid']  # for list of possible arrays, see solver._pkgdata()
-    dataBasename = 'nobuffer'
-    solver.dataSaverHandler.initialize_datasaver(dataBasename, maxIterations, arraysToSave)
+    maxIterations, lmParams, tol = initialize_parameters()
+    fluxModel = shestakov_nonlinear_diffusion.AnalyticFluxModel(dx)
+    turbHandler = tango.lodestro_method.TurbulenceHandler(dx, x, fluxModel)
+    label = 'n'
+    lodestroMethod = tango.lodestro_method.lm(0.1, 0.1, lmParams['thetaParams'])
+    compute_all_H = ComputeAllHNoBuffer()
+    field0 = tango.multifield.Field(label=label, rightBC=nL, profile_mminus1=n, compute_all_H=compute_all_H, lodestroMethod=lodestroMethod)
+    fields = [field0]
+    tango.multifield.check_fields_initialize(fields)
+    
+    compute_all_H_all_fields = tango.multifield.ComputeAllHAllFields(fields, turbHandler)
+    
+    tArray = np.array([0, 1e4])  # specify the timesteps to be used
+    # set up fileHandler
+    setNumber = 0
+    initialData = tango.handlers.TangoHistoryHandler.set_up_initialdata(setNumber, x, x, tArray[1], fields)
+    basename = 'regsoln'
+    tangoHistoryHandler = tango.handlers.TangoHistoryHandler(iterationInterval=1, basename=basename, maxIterations=maxIterations, initialData=initialData)
+    
+    solver = tango.solver.Solver(L, x, tArray, maxIterations, tol, compute_all_H_all_fields, fields)
+    solver.fileHandlerExecutor.add_handler(tangoHistoryHandler)
+    
     while solver.ok:
     # Implicit time advance: iterate to solve the nonlinear equation!
         solver.take_timestep()
-    nSteadyState = solver.profile
+    nSteadyState = solver.profiles['n']
     return nSteadyState
     
 L, N, dxTangoGrid, x, nL, n = initialize_shestakov_problem()
 xTango = x
-maxIterations, lmparams, tol = initialize_parameters()
+maxIterations, lmParams, tol = initialize_parameters()
 
 #==============================================================================
 #  MAIN STARTS HERE :  Do a bunch of set up
@@ -128,10 +139,10 @@ dxTurbGrid = xTurb[1] - xTurb[0]
 xExtrapZoneLeft = 0.7
 xExtrapZoneRight = 0.77
 polynomialDegree = 1
-gridMapper = tng.interfacegrids_gene.TangoOutsideExtrapCoeffs(xTango, xTurb, xExtrapZoneLeft, xExtrapZoneRight, polynomialDegree)
+gridMapper = tango.interfacegrids_gene.TangoOutsideExtrapCoeffs(xTango, xTurb, xExtrapZoneLeft, xExtrapZoneRight, polynomialDegree)
 
 # model for turbulent flux: Shestakov model
-fluxModel = shestakov_nonlinear_diffusion.shestakov_analytic_fluxmodel(dxTurbGrid)
+fluxModel = shestakov_nonlinear_diffusion.AnalyticFluxModel(dxTurbGrid)
 
 # Add decorator to apply noise first, then apply buffer
 noise_Lac = 0.2  # correlation length of noise
@@ -140,25 +151,35 @@ fluxModel = noisyflux.NoisyFlux(fluxModel, noise_amplitude, noise_Lac, dxTurbGri
 
 # apply decorator to create a 'buffer zone'
 fluxModel = bufferzone.BufferZone(fluxModel, taperwidth=0.125)
-    
-turbhandler = tng.lodestro_method.TurbulenceHandler(dxTurbGrid, x, lmparams, fluxModel, gridMapper=gridMapper)
-t_array = np.array([0, 1e4])  # specify the timesteps to be used.
+turbHandler = tango.lodestro_method.TurbulenceHandler(dxTurbGrid, xTango, fluxModel)
 
-compute_all_H = ComputeAllHWithBuffer(turbhandler)
-solver = tng.solver.Solver(L, x, n, nL, t_array, maxIterations, tol, compute_all_H, turbhandler)
+# set up field
+label = 'n'
+lodestroMethod = tango.lodestro_method.lm(lmParams['EWMAParamTurbFlux'], lmParams['EWMAParamProfile'], lmParams['thetaParams'])
+compute_all_H = ComputeAllHWithBuffer()
+field0 = tango.multifield.Field(label=label, rightBC=nL, profile_mminus1=n, compute_all_H=compute_all_H, gridMapper=gridMapper, lodestroMethod=lodestroMethod)
+fields = [field0]
+tango.multifield.check_fields_initialize(fields)
+compute_all_H_all_fields = tango.multifield.ComputeAllHAllFields(fields, turbHandler)
 
-# set up data saver
-arraysToSave = ['H2', 'H3', 'profile', 'fluxTurbGrid', 'xTurbGrid', 'DTurbGrid']  # for list of possible arrays, see solver._pkgdata()
-dataBasename = 'ex_noisebuffer'
-solver.dataSaverHandler.initialize_datasaver(dataBasename, maxIterations, arraysToSave)
-tlog.info("Preparing DataSaver to save files with prefix {}.".format(dataBasename))
+tArray = np.array([0, 1e4])  # specify the timesteps to be used.
+
+# set up fileHandler
+setNumber = 0
+t = tArray[1]
+initialData = tango.handlers.TangoHistoryHandler.set_up_initialdata(setNumber, xTango, xTurb, t, fields)
+basename = 'tangodata'
+tangoHistoryHandler = tango.handlers.TangoHistoryHandler(iterationInterval=1, basename=basename, maxIterations=maxIterations, initialData=initialData)
+
+solver = tango.solver.Solver(L, xTango, tArray, maxIterations, tol, compute_all_H_all_fields, fields)
+solver.fileHandlerExecutor.add_handler(tangoHistoryHandler)
 
 while solver.ok:
     # Implicit time advance: iterate to solve the nonlinear equation!
     solver.take_timestep()
  
 #plt.figure()
-nSteadyState = solver.profile
+nSteadyState = solver.profiles['n']
 #plt.plot(x, nSteadyState)
 #plt.title("With Buffer: n_final")
 #
@@ -167,34 +188,32 @@ nSteadyState2 = regular_solution()
 #plt.plot(x, nSteadyState2)
 #plt.title("No Buffer: n_final")
 
-filenameNoBuffer = "nobuffer1"
-filenameBuffer = dataBasename + "1"
-timestepNoBuffer = analysis.TimestepData(filenameNoBuffer)
-timestepBuffer = analysis.TimestepData(filenameBuffer)
-lastiterNoBuffer = timestepNoBuffer.get_last_iteration()
-lastiterBuffer = timestepBuffer.get_last_iteration()
 
-errHistory = solver.errHistoryFinal
-plt.figure()
-plt.semilogy(errHistory)
-plt.title('residual vs. iterations')
-plt.xlabel('iteration number')
+filenameNoBuffer = 'regsoln_s0.hdf5'
+filenameBuffer = 'tangodata_s0.hdf5'
 
-
-plt.figure()
-plt.plot(x, nSteadyState2, 'r-', label='No Buffer')
-plt.plot(x, nSteadyState, 'b-', label='With Buffer')
-plt.legend(loc='best')
-plt.title('n_final')
-plt.grid(b=True, which='major', color='k', linestyle='-')
-plt.grid(b=True, which='minor', color='r', linestyle='-', alpha=0.2)
-plt.minorticks_on()
-
-plt.figure()
-plt.plot(lastiterNoBuffer.x, lastiterNoBuffer.H2, 'r-', label='No Buffer')
-plt.plot(lastiterBuffer.x, lastiterBuffer.H2, 'b-', label='With Buffer')
-plt.legend(loc='best')
-plt.title('H2_final')
-plt.grid(b=True, which='major', color='k', linestyle='-')
-plt.grid(b=True, which='minor', color='r', linestyle='-', alpha=0.2)
-plt.minorticks_on()
+with h5py.File(filenameNoBuffer, 'r') as fNoBuffer, h5py.File(filenameBuffer, 'r') as fBuffer:
+    iterationNumber = fBuffer['iterationNumber'][:]
+    errHistory = fBuffer['errHistory'][:]
+    plt.figure()
+    plt.semilogy(iterationNumber, errHistory)
+    plt.title('residual vs. iterations')
+    plt.xlabel('iteration number')
+    
+    plt.figure()
+    plt.plot(x, nSteadyState2, 'r-', label='No Buffer')
+    plt.plot(x, nSteadyState, 'b-', label='With Buffer')
+    plt.legend(loc='best')
+    plt.title('n_final')
+    plt.grid(b=True, which='major', color='k', linestyle='-')
+    plt.grid(b=True, which='minor', color='r', linestyle='-', alpha=0.2)
+    plt.minorticks_on()
+    
+    plt.figure()
+    plt.plot(x, fNoBuffer['n/H2'][-1, :], 'r-', label='No Buffer')
+    plt.plot(x, fBuffer['n/H2'][-1, :], 'b-', label='With Buffer')
+    plt.legend(loc='best')
+    plt.title('H2_final')
+    plt.grid(b=True, which='major', color='k', linestyle='-')
+    plt.grid(b=True, which='minor', color='r', linestyle='-', alpha=0.2)
+    plt.minorticks_on()

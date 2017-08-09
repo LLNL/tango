@@ -25,10 +25,16 @@ class BufferZone(object):
         self.fluxModel = fluxModel
         self.taperwidth = taperwidth
         
-    def get_flux(self, profile):
-        flux = self.fluxModel.get_flux(profile)
-        dampedFlux = _damp_flux(flux, self.taperwidth)
-        return dampedFlux
+    def get_flux(self, profiles):
+        fluxes = self.fluxModel.get_flux(profiles)
+        dampedFluxes = self._damp_fluxes(fluxes)
+        return dampedFluxes
+        
+    def _damp_fluxes(self, fluxes):
+        dampedFluxes = {}
+        for label in fluxes:
+            dampedFluxes[label] = _damp_flux(fluxes[label], self.taperwidth)
+        return dampedFluxes
         
 def _damp_flux(flux, taperwidth):
     """Apply damping to the sides of the input flux.  The damping applies to a width of

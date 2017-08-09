@@ -205,22 +205,6 @@ compute_all_H_all_fields = tango.multifield.ComputeAllHAllFields(fields, turbHan
 
 tArray = np.array([0, 1e6])  # specify the timesteps to be used.
 
-# set up the metadata... make a function
-metadata = {
-    'setNumber': 0,
-    'writes': 0,
-    'xTango': x,
-    'xTurb': x,
-    't': tArray[1],
-    'timestepNumber': 1}
-
-(EWMAParamTurbFlux, EWMAParamProfile) = field1.lodestroMethods.get_ewma_params()
-field1metadata = {'EWMAParamProfile': EWMAParamProfile, 'EWMAParamTurbFlux': EWMAParamTurbFlux, 'profile_mminus1': field1.profile_mminus1}
-metadata[field1.label] = field1metadata
-    
-# Tango handlers
-tangoHistoryHandler = tango.handlers.TangoHistoryHandlerMultifield(iterationInterval=1, basename='tango_history', maxIterations=maxIterations, metadata=metadata)
-
 # initialize the solver
 solver = tango.solver.Solver(L, x, tArray, maxIterations, tol, compute_all_H_all_fields, fields)
 

@@ -12,6 +12,7 @@ import numpy as np
 import matplotlib
 import matplotlib.pyplot as plt
 import h5py
+import os
 
 import tango.tango_logging as tlog
 from tango.extras import shestakov_nonlinear_diffusion
@@ -108,7 +109,9 @@ while solver.ok:
 
 n = solver.profiles[label]
 
-f = h5py.File(filename, 'r')
+with h5py.File(filename, 'r') as f:
+    # do any post-processing analysis
+    pass
     
     
 #n = solver.profile  # finished solution
@@ -133,6 +136,9 @@ else:
     print('Error at end compared to analytic steady state solution is %f' % (solutionRmsError))
 
 
+    
+os.remove(filename)    
+    
 #plt.figure()
 #plt.semilogy(errhistory)
 #plt.xlabel('iteration number')

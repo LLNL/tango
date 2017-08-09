@@ -9,13 +9,11 @@ closed form answer for the steady state solution which can be compared with the 
 
 from __future__ import division, absolute_import
 import numpy as np
-import matplotlib
 import matplotlib.pyplot as plt
 
 import tango.tango_logging as tlog
 from tango.extras import shestakov_nonlinear_diffusion
 import tango
-import tango.analysis
 
 def initialize_shestakov_problem():
     # Problem Setup
@@ -66,8 +64,6 @@ maxIterations, lmParams, tol = initialize_parameters()
 fluxModel = shestakov_nonlinear_diffusion.AnalyticFluxModel(dx)
 
 label = 'n'
-
-
 turbHandler = tango.lodestro_method.TurbulenceHandler(dx, x, fluxModel)
 
 compute_all_H_density = ComputeAllH()
@@ -83,25 +79,15 @@ tArray = np.array([0, 1e4])  # specify the timesteps to be used.
 
 solver = tango.solver.Solver(L, x, tArray, maxIterations, tol, compute_all_H_all_fields, fields)
 
-
-# set up data logger
-#arraysToSave = ['H2', 'H3', 'profile']  # for list of possible arrays, see solver._pkgdata()
-#dataBasename = 'shestakov_solution_data'
-#solver.dataSaverHandler.initialize_datasaver(dataBasename, maxIterations, arraysToSave)
-#tlog.info("Preparing DataSaver to save files with prefix {}.".format(dataBasename))
-
 tlog.info("Initialization complete.")
-
-
 tlog.info("Entering main time loop...")
+
 while solver.ok:
     # Implicit time advance: iterate to solve the nonlinear equation!
     solver.take_timestep()
 
-n = solver.profiles[label]
+n = solver.profiles[label] # finished solution
     
-    
-#n = solver.profile  # finished solution
 # Plot result and compare with analytic steady state solution
 nss = shestakov_nonlinear_diffusion.steady_state_solution(x, nL)
 
@@ -122,14 +108,7 @@ else:
     print('The solver failed for some reason.')
     print('Error at end compared to analytic steady state solution is %f' % (solutionRmsError))
 
-
-#plt.figure()
-#plt.semilogy(errhistory)
-#plt.xlabel('iteration number')
-#plt.ylabel('rms error')
-#plt.plot(x, n-nss)
-#plt.ylim(ymin=0)
-# filename = dataBasename + "1"
-# Timestep = tango.analysis.TimestepData(filename)
-# lastiter = Timestep.get_last_iteration()
-# lastiter.plot_profile_and_starting_profile(savename='solution.png')
+plt.figure()
+plt.semilogy(solver.errHistoryFinal)
+plt.xlabel('iteration number')
+plt.ylabel('rms error')

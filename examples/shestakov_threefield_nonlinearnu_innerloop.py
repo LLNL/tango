@@ -1,4 +1,7 @@
-"""Analytic example.  Use Tango to find the steady-state solution of:
+"""Analytic example with a nonlinear collisional equilibration term between ion and electron pressures.  Here, the use
+of an inner iteration loop to converge the nonlinear term is demonstrated.
+
+Use Tango to find the steady-state solution of:
 
 dn/dt + dG/dx = Sn(x) 
 dpi/dt + dQi/dx = Si(x) - nu * (pi - pe)
@@ -9,6 +12,7 @@ where
     Qi = -D dpi/dx
     Qe = -D dpe/dx
 and
+    nu = nu0 / ( pi/n + pe/n)^(3/2) 
     D = (dpi/dx)^2 / pi^2
 
 Here, p0 is independent as in the Shestakov example, and p1 is coupled to p0.
@@ -105,33 +109,44 @@ class ComputeAllH_n(object):
         HCoeffs = HCoeffs + HCoeffsTurb
         return HCoeffs
     
+def calc_nu(nu0, n, pi, pe):
+    nu = nu0 / (( pi/n + pe/n) ** (3/2) )
+    return nu
+        
 class ComputeAllH_pi(object):
-    def __init__(self, nu):
-        self.nu = nu
+    def __init__(self, nu0):
+        self.nu0 = nu0
     def __call__(self, t, x, profiles, HCoeffsTurb):
-        #pi = profiles['pi']
-        #pe = profiles['pe']
+        n = profiles['n']
+        pi = profiles['pi']
+        pe = profiles['pe']
         #n = profiles['field0']
         # Define the contributions to the H coefficients for the Shestakov Problem
         H1 = np.ones_like(x)
         H7 = source_i(x)
-        H6 = -self.nu * np.ones_like(x)
-        H8 = self.nu * np.ones_like(x)
+        
+        nu = calc_nu(self.nu0, n, pi, pe)
+        H6 = -nu
+        H8 = nu
         
         HCoeffs = tango.multifield.HCoefficients(H1=H1, H6=H6, H7=H7, H8=H8)
         HCoeffs = HCoeffs + HCoeffsTurb
         return HCoeffs
         
 class ComputeAllH_pe(object):
-    def __init__(self, nu):
-        self.nu = nu
+    def __init__(self, nu0):
+        self.nu0 = nu0
     def __call__(self, t, x, profiles, HCoeffsTurb):
-        #n = profiles['field1']
+        n = profiles['n']
+        pi = profiles['pi']
+        pe = profiles['pe']
         # Define the contributions to the H coefficients for the Shestakov Problem
         H1 = np.ones_like(x)
         H7 = source_e(x)
-        H6 = -self.nu * np.ones_like(x)
-        H8 = self.nu * np.ones_like(x)
+        
+        nu = calc_nu(self.nu0, n, pi, pe)
+        H6 = -nu
+        H8 = nu
         
         HCoeffs = tango.multifield.HCoefficients(H1=H1, H6=H6, H7=H7, H8=H8)
         HCoeffs = HCoeffs + HCoeffsTurb
@@ -155,7 +170,7 @@ n_L = 2
 pi_L = 0.1
 pe_L = 0.3
 
-nu = 5
+nu0 = 2.2
 
 maxIterations, lmParams, tol = initialize_parameters()
 
@@ -163,6 +178,8 @@ maxIterations, lmParams, tol = initialize_parameters()
 label0 = 'n'
 label1 = 'pi'
 label2 = 'pe'
+labels = [label0, label1, label2]
+
 
 # set up for n
 compute_all_H_n = ComputeAllH_n()
@@ -170,12 +187,12 @@ lm_n = tango.lodestro_method.lm(lmParams['EWMAParamTurbFlux'], lmParams['EWMAPar
 field0 = tango.multifield.Field(label=label0, rightBC=n_L, profile_mminus1=n_IC, compute_all_H=compute_all_H_n, lodestroMethod=lm_n)
 
 # set up for pi
-compute_all_H_pi = ComputeAllH_pi(nu)
+compute_all_H_pi = ComputeAllH_pi(nu0)
 lm_pi = tango.lodestro_method.lm(lmParams['EWMAParamTurbFlux'], lmParams['EWMAParamProfile'], lmParams['thetaParams'])
 field1 = tango.multifield.Field(label=label1, rightBC=pi_L, profile_mminus1=pi_IC, compute_all_H=compute_all_H_pi, lodestroMethod=lm_pi, coupledTo='pe')
 
 # set up for pe
-compute_all_H_pe = ComputeAllH_pe(nu)
+compute_all_H_pe = ComputeAllH_pe(nu0)
 lm_pe = tango.lodestro_method.lm(lmParams['EWMAParamTurbFlux'], lmParams['EWMAParamProfile'], lmParams['thetaParams'])
 field2 = tango.multifield.Field(label=label2, rightBC=pe_L, profile_mminus1=pe_IC, compute_all_H=compute_all_H_pe, lodestroMethod=lm_pe, coupledTo='pi')
 
@@ -191,18 +208,10 @@ compute_all_H_all_fields = tango.multifield.ComputeAllHAllFields(fields, turbHan
 
 tArray = np.array([0, 1e6])  # specify the timesteps to be used.
 
-# initialize the solver
-solver = tango.solver.Solver(L, x, tArray, maxIterations, tol, compute_all_H_all_fields, fields)
-
-
-# set up data logger
-#arraysToSave = ['H2', 'H3', 'profile']  # for list of possible arrays, see solver._pkgdata()
-#dataBasename = 'shestakov_solution_data'
-#solver.dataSaverHandler.initialize_datasaver(dataBasename, maxIterations, arraysToSave)
-#tlog.info("Preparing DataSaver to save files with prefix {}.".format(dataBasename))
+# initialize the solver and use an inner iteration loop
+solver = tango.solver.Solver(L, x, tArray, maxIterations, tol, compute_all_H_all_fields, fields, useInnerIteration=True, innerIterationMaxCount=20)
 
 tlog.info("Initialization complete.")
-
 
 tlog.info("Entering main time loop...")
 while solver.ok:
@@ -253,8 +262,8 @@ Qi = fluxes['pi']
 Qe = fluxes['pe']
 
 RHSn = source_n(x)
-RHSi = source_i(x) - nu * (pi - pe)
-RHSe = source_e(x) - nu * (pe - pi)
+RHSi = source_i(x) - calc_nu(nu0, n, pi, pe) * (pi - pe)
+RHSe = source_e(x) - calc_nu(nu0, n, pi, pe) * (pe - pi)
 
 RHSn_integrated = scipy.integrate.cumtrapz(RHSn, x=x, initial=0)
 RHSi_integrated = scipy.integrate.cumtrapz(RHSi, x=x, initial=0)
@@ -278,15 +287,8 @@ line1, = plt.plot(x, Qe, 'b-', label='numerical flux for pe')
 line2, = plt.plot(x, RHSe_integrated, 'r-', label='integrated sources')
 plt.title('pe')
 plt.legend(handles=[line1, line2])
-    
-    
+        
 plt.figure()
 plt.semilogy(solver.errHistoryFinal)
 plt.xlabel('iteration number')
 plt.ylabel('rms error')
-#plt.plot(x, n-nss)
-#plt.ylim(ymin=0)
-# filename = dataBasename + "1"
-# Timestep = tango.analysis.TimestepData(filename)
-# lastiter = Timestep.get_last_iteration()
-# lastiter.plot_profile_and_starting_profile(savename='solution.png')

@@ -31,7 +31,9 @@ from .utilities import util
 #   turbhandler to get EWMA Params?  but there is one for each field.
 class Solver(object):
     def __init__(self, L, x, tArray, maxIterations, tol, compute_all_H_all_fields, fields, 
-                 startIterationNumber=0, profiles=None, maxIterationsPerSet=np.inf, user_control_func=None):
+                 startIterationNumber=0, profiles=None, maxIterationsPerSet=np.inf,
+                 useInnerIteration=False, innerIterationMaxCount=20,
+                 user_control_func=None):
         """Constructor
         
         Inputs:
@@ -51,6 +53,9 @@ class Solver(object):
           startIteration            [optional] Used for restarting   Set the starting iteration number, default 0 (int)
           profiles                  [optional] Used for restarting.  Set the initial profiles, default to field.profile_mminus1 (dict of arrays, accessed by label)
           maxIterationsPerSet       [optional] Used for shutting down gracefully for restarts.  Set the number of iterations that can be performed on this set. (int)
+          useInnerIteration         [optional] If True, perform an inner iteration loop [need to specify loop parameters somewhere...] where the turbulent
+                                       coefficients are held fixed but other nonlinear terms can be converged. (boolean)
+          innerIterationMaxCount    [optional, default=20] Maximum number of iterations to use on the inner iteration loop (int)
           user_control_func         [optional] user-supplied function for customizing control (function).  Runs once per iteration, at the end.
                                         The function must take one argument, and that is the Solver object.
         """
@@ -64,6 +69,8 @@ class Solver(object):
         self.tol = tol
         self.compute_all_H_all_fields = compute_all_H_all_fields
         self.fields = fields
+        self.useInnerIteration = useInnerIteration
+        self.innerIterationMaxCount = innerIterationMaxCount
         if user_control_func is not None:
             assert callable(user_control_func), "user_control_func must be callable (e.g., a function)"
         self.user_control_func = user_control_func
@@ -117,16 +124,7 @@ class Solver(object):
                 tango_logging.info("Reached the final timestep m={} at t={}.  Simulation ending...".format(self.m, self.t))
                 self.reachedEnd = True
                 
-        
-        # TODO:
-        ##### Section for saving data ####
         self.errHistoryFinal = self.errHistory[0:self.countStoredIterations]
-#        (EWMAParamTurbFlux, EWMAParamProfile) = self.turbhandler.get_ewma_params()
-#        
-#        timestepData = {'x': self.x, 'profile_m': self.profile, 'profile_mminus1': self.profile_mminus1, 'errhistory': self.errHistoryFinal, 't': self.t, 'm': self.m,
-#                        'EWMAParamTurbFlux':EWMAParamTurbFlux,  'EWMAParamProfile':EWMAParamProfile}
-#        self.dataSaverHandler.add_one_off_data(timestepData)
-#        self.dataSaverHandler.save_to_file(self.m)
 #        
 #        # Reset if another timestep is about to come.  If not, data is preserved for access at end.
 #        if self.ok:
@@ -150,12 +148,10 @@ class Solver(object):
         index = self.countStoredIterations
             
         # iterate through all the fields, compute all the H's
-        (HCoeffsAllFields, extradataAllFields) = self.compute_all_H_all_fields(self.t, self.x, self.profiles)
+        (HCoeffsAllFields, HCoeffsTurbAllFields, extradataAllFields) = self.compute_all_H_all_fields(self.t, self.x, self.profiles)
     
-        
         # create fieldGroups from fields as prelude to the iteration step
         fieldGroups = fieldgroups.fields_to_fieldgroups(self.fields, HCoeffsAllFields)
-   
         
         # discretize and compute matrix system [iterating over groups]
         for fieldGroup in fieldGroups:
@@ -173,6 +169,12 @@ class Solver(object):
             
         # get the profiles for the fields out of the fieldGroups, put into a dict of profiles
         self.profiles = fieldgroups.fieldgroups_to_profiles(fieldGroups)
+        
+        
+        # ADD INNER ITERATION LOOP HERE
+        if self.useInnerIteration:
+            # self.profiles is set internally
+            (HCoeffsAllFields, ignore, ignore) = self.perform_inner_iteration(HCoeffsTurbAllFields)
         
         # some output information
         endTime = time.time()
@@ -198,7 +200,43 @@ class Solver(object):
             tango_logging.info("Timestep m={} and time t={}:  maxIterations ({}) reached.  Error={} while tol={}".format(self.m, self.t, self.maxIterations, rmsError, self.tol))
         if self.countStoredIterations >= self.maxIterationsPerSet:
             tango_logging.info("Timestep m={} and time t={}:  maxIterationsPerSet ({}) reached.  Error={} while tol={}.  Shutting down...".format(self.m, self.t, self.maxIterationsPerSet, rmsError, self.tol))
+
+    def perform_inner_iteration(self, HCoeffsTurbAllFields):
+        """Todo: Need to set some inner iteration parameters.
+        
+        Finish condition: fixed number of iterations.  (Have not implemented a tolerance, yet)
+        """
+        innerIterationCounter = 0
+        innerIterationDone = False
+        while not innerIterationDone:
+            # iterate through all the fields, compute all the H's
+            (HCoeffsAllFields, ignore, ignore) = self.compute_all_H_all_fields(self.t, self.x, self.profiles, computeTurbulence=False, HCoeffsTurbAllFields=HCoeffsTurbAllFields)
             
+            # create fieldGroups from fields as prelude to the iteration step
+            fieldGroups = fieldgroups.fields_to_fieldgroups(self.fields, HCoeffsAllFields)
+            
+            # discretize and compute matrix system [iterating over groups]
+            for fieldGroup in fieldGroups:
+                fieldGroup.matrixEqn = fieldGroup.Hcoeffs_to_matrix_eqn(self.dt, self.dx, fieldGroup.rightBC, fieldGroup.psi_mminus1, fieldGroup.HCoeffs)
+            
+            # check convergence
+            (ignore, rmsError, normalizedResids) = self.check_convergence(fieldGroups, self.profiles, self.tol)
+            
+            # compute new iterate of profiles [iterating over groups]
+            for fieldGroup in fieldGroups:
+                fieldGroup.profileSolution = fieldGroup.solve_matrix_eqn(fieldGroup.matrixEqn)
+            
+            # get the profiles for the fields out of the fieldGroups, put into a dict of profiles
+            self.profiles = fieldgroups.fieldgroups_to_profiles(fieldGroups)
+            
+            # finish up
+            innerIterationCounter += 1
+            # check if done
+            if innerIterationCounter >= self.innerIterationMaxCount:
+                innerIterationDone = True
+            # tolerance?
+            
+        return (HCoeffsAllFields, normalizedResids, rmsError)
     @property
     def ok(self):
         """True unless a stop condition is reached."""

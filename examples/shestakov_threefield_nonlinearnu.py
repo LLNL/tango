@@ -59,9 +59,9 @@ class ShestakovThreeFieldFluxModel(object):
         pe = profiles['pe']
     
         # Return flux Gamma on the same grid as n
-        dndx = tango.derivatives.dx_centered_difference_edge_first_order(n, dx)
-        dpidx = tango.derivatives.dx_centered_difference_edge_first_order(pi, dx)
-        dpedx = tango.derivatives.dx_centered_difference_edge_first_order(pe, dx)
+        dndx = tango.derivatives.dx_centered_difference_edge_first_order(n, self.dx)
+        dpidx = tango.derivatives.dx_centered_difference_edge_first_order(pi, self.dx)
+        dpedx = tango.derivatives.dx_centered_difference_edge_first_order(pe, self.dx)
         D = dpidx**2 / pi**2
         Gamma = -D * dndx
         Qi = -D * dpidx
@@ -175,8 +175,6 @@ maxIterations, lmParams, tol = initialize_parameters()
 label0 = 'n'
 label1 = 'pi'
 label2 = 'pe'
-labels = [label0, label1, label2]
-
 
 # set up for n
 compute_all_H_n = ComputeAllH_n()
