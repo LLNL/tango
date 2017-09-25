@@ -24,7 +24,6 @@ import scipy
 
 import tango.tango_logging as tlog
 import tango
-import tango.analysis
 import tango.derivatives
 
 def initialize_shestakov_problem():

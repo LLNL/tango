@@ -188,6 +188,7 @@ class Solver(object):
         datadict = self._pkgdata(
                 HCoeffsAllFields=HCoeffsAllFields, extradataAllFields=extradataAllFields, profiles=self.profiles, normalizedResids=normalizedResids,
                 rmsError=rmsError, iterationNumber=self.iterationNumber)
+        self.datadict=datadict
         self.fileHandlerExecutor.execute_scheduled(datadict, self.iterationNumber)
         
         # Check for NaNs or infs or negative values
@@ -302,7 +303,7 @@ class Solver(object):
         for label in normalizedResids:
             resid = normalizedResids[label]
             totalLength += len(resid)
-            sumOfSquaresResid += np.sum( resid**2)
+            sumOfSquaresResid += np.sum(resid**2)
         rmsError = np.sqrt(1/totalLength * sumOfSquaresResid)
         
         converged = False
