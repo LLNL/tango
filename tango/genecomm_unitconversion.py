@@ -52,6 +52,8 @@ def radius_SI_to_libgenetango_input(psi, a):
     normalizedRadius = psi/a
     return normalizedRadius
 
+##### Functions converting quantities from GENE's normalized units to SI #####    
+    
 def dVdx_gene_to_SI(dVdxHat, Lref):
     """Convert GENE's output dVdxHat into SI units.
     GENE outputs dVdx_hat = dV_hat / dx_hat, where V_hat = V/Lref^3 and x_hat = r/Lref, where x=r.  Hence, one has
@@ -77,7 +79,7 @@ def heatflux_gene_to_SI(heatFluxHat, nref, Tref, mref, Bref, Lref):
     
     Inputs:
       heatFluxHat       GENE's output, <Qhat dot gradhat xhat> (array)
-      nref              measured in 10^19 m^-3
+      nref              measured in 10^19 m^-3 (scalar)
       Tref              measured in keV (scalar)
       mref              measured in proton masses (scalar)
       Bref              measured in Tesla (scalar)
@@ -89,6 +91,24 @@ def heatflux_gene_to_SI(heatFluxHat, nref, Tref, mref, Bref, Lref):
     heatFluxSI = heatFluxHat * Qref
     return heatFluxSI
 
+def particleflux_gene_to_SI(particleFluxHat, nref, Tref, mref, Bref, Lref):
+    """Convert GENE's output radial particle flux into SI units.
+    GENE outputs avgParticleFluxHat = <Gammahat dot gradhat xhat> = <Gamma/Gammaref dot Lref grad x/Lref> = <Gamma dot grad x> / Gammaref.    
+    For circular geometry, x=r
+    
+    Inputs:
+      particleFluxHat   GENE's output, <Gammahat dot gradhat xhat> (array)
+      nref              measured in 10^19 m^-3 (scalar)
+      Tref              measured in keV (scalar)
+      mref              measured in proton masses (scalar)
+      Bref              measured in Tesla (scalar)
+      Lref              measured in m (scalar)
+    Outputs:
+      particleFluxSI    <Gamma dot grad x> (array)
+    """
+    Gammaref = Gamma_ref(nref, Tref, mref, Bref, Lref)
+    particleFluxSI = particleFluxHat * Gammaref
+    return particleFluxSI
 
 ##### Functions calculating derived reference values for GENE #####
 def omega_ref(Bref, mref):
@@ -145,7 +165,7 @@ def Q_ref(nref, Tref, mref, Bref, Lref):
       Bref      measured in Tesla (scalar)
       Lref      measured in m (scalar)
     Outputs:
-      Qref      measured in Joules / (m^2 s)
+      Qref      measured in Joules / (m^2 s) (scalar)
     """
     cref = c_ref(Tref, mref)
     rhoref = rho_ref(Tref, mref, Bref)
@@ -155,8 +175,34 @@ def Q_ref(nref, Tref, mref, Bref, Lref):
     nref_SI = nrefGeneFactor * nref
     Tref_SI = 1000 * e * Tref
     
+    # Compute it
     Qref = nref_SI * Tref_SI * cref * rhoref**2 / Lref**2
     return Qref
+
+def Gamma_ref(nref, Tref, mref, Bref, Lref):
+    """Compute reference particle flux Gammaref = nref * cref * rhoref^2 / Lref^2.  
+    
+    The GENE Documentation, Appendix A, p66 calls this Gamma_gb.
+    
+    Inputs:
+      nref      measured in 10^19 m^-3 (scalar)
+      Tref      measured in keV (scalar)
+      mref      measured in proton masses (scalar)
+      Bref      measured in Tesla (scalar)
+      Lref      measured in m (scalar)
+    Outputs:
+      Gammaref   measured in 1 / (m^2 s) (scalar)
+    """
+    cref = c_ref(Tref, mref)
+    rhoref = rho_ref(Tref, mref, Bref)
+    
+    # convert to SI
+    nrefGeneFactor = 1e19
+    nref_SI = nrefGeneFactor * nref
+    
+    # Compute it
+    Gammaref = nref_SI * cref * rhoref**2 / Lref**2    
+    return Gammaref
     
 def calculate_consistent_rhostar(Tref, Bref, mref, minorRadius):
     """Compute a self-consistent rhostar, given Tref, mref, Bref, and minor radius.
