@@ -193,7 +193,7 @@ class TangoHistoryHandler(Handler):
           iterationInterval     interval for executing the Handler's task (integer)
           basename              base of filename to save data to (string)
           maxIterations         maximum number of iterations Tango will use per timestep (integer)
-          initialDta            initial data to save at the beginning... dict with same hierarchical structure as the hdf5 file. (dict)
+          initialData           initial data to save at the beginning... dict with same hierarchical structure as the hdf5 file. (dict)
                                    Must have the attribute 'setNumber', referring to which set in a given Tango run this is (int)
         """
         Handler.__init__(self, iterationInterval)

@@ -84,8 +84,6 @@ class Solver(object):
         else:
             self.profiles = profiles
         # initialize other instance data
-        # DataSaverHandler and fileHandlerExecutor are two different ways of dealing with saving files on disk (and have different goals)
-        # self.dataSaverHandler = datasaver.DataSaverHandler()
         self.fileHandlerExecutor = handlers.Executor()
         
         self.solutionError = False
@@ -128,7 +126,6 @@ class Solver(object):
 #        
 #        # Reset if another timestep is about to come.  If not, data is preserved for access at end.
 #        if self.ok:
-#            self.dataSaverHandler.reset_for_next_timestep()
 #            self.fileHandlerExecutor.reset_handlers_for_next_timestep()
         ##### End of section for saving data ##### 
         
