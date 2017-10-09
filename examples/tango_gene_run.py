@@ -2,7 +2,7 @@
 Checklist for a Gene-Tango run:
 GENE parameters file
     diagdir
-    read checkpoint
+    read_checkpoint [and copy and rename a start file to checkpoint_000]
     parallelization / number of processors
 
 submit.cmd file
@@ -97,7 +97,6 @@ def temperature_initial_condition(rho):
     rhominus = rho - rho0 + deltar/2
     deltaT = 0.1
 
-    e = 1.60217662e-19
     T0 = 1000*e
     invasp = 0.36
     T = T0 * np.exp( -kappa_T * invasp * (rho - rho0 - deltaT * (np.tanh(rhominus/deltaT) - np.tanh(deltar/2/deltaT))));
@@ -269,12 +268,12 @@ def problem_setup():
     # specify a source function amplitude
     A = 57.3e6 # in SI, W/m^3  # for total input power of 3 MW
     
-    t_array = np.array([0, 1e4])  # specify the timesteps to be used.
+    tArray = np.array([0, 1e4])  # specify the timesteps to be used.
     
     # creation of turbulence handler
     turbHandler = tango.lodestro_method.TurbulenceHandler(drGene, rTango, geneFluxModel, VprimeTango=VprimeTango, fluxSmoother=fluxSmoother)
     
-    compute_all_H_pressure = ComputeAllH(VprimeTango, minorRadius, majorRadius, A))
+    compute_all_H_pressure = ComputeAllH(VprimeTango, minorRadius, majorRadius, A)
     lodestroMethod = tango.lodestro_method.lm(lmParams['EWMAParamTurbFlux'], lmParams['EWMAParamProfile'], lmParams['thetaParams'])
     
     # seed the EWMA for the turbulent heat flux
@@ -288,7 +287,7 @@ def problem_setup():
     tango.multifield.check_fields_initialize(fields)
     compute_all_H_all_fields = tango.multifield.ComputeAllHAllFields(fields, turbHandler)
     
-    return (L, rTango, rGene, pressureRightBC, pressureICTango, maxIterations, tol, geneFluxModel, turbHandler, compute_all_H_all_fields, t_array, fields)
+    return (L, rTango, rGene, pressureRightBC, pressureICTango, maxIterations, tol, geneFluxModel, turbHandler, compute_all_H_all_fields, tArray, fields)
 
     
 # ************************************************** #
@@ -296,7 +295,7 @@ def problem_setup():
 # ************************************************** #
 MPIrank = gene_tango.init_mpi()
 tlog.setup(True, MPIrank, tlog.DEBUG)
-(L, rTango, rGene, pressureRightBC, pressureICTango, maxIterations, tol, geneFluxModel, turbHandler, compute_all_H_all_fields, t_array, fields) = problem_setup()
+(L, rTango, rGene, pressureRightBC, pressureICTango, maxIterations, tol, geneFluxModel, turbHandler, compute_all_H_all_fields, tArray, fields) = problem_setup()
 
 
 # set up FileHandlers
@@ -322,7 +321,7 @@ filenameTangoHistory = basename + '_s{}'.format(setNumber) + '.hdf5'
 #  specify how long GENE runs between Tango iterations.  Specified in Lref/cref
 geneFluxModel.set_simulation_time(SIMTIME)
 
-solver = tango.solver.Solver(L, x, tArray, maxIterations, tol, compute_all_H_all_fields, fields)
+solver = tango.solver.Solver(L, rTango, tArray, maxIterations, tol, compute_all_H_all_fields, fields)
 
 # Add the file handlers
 solver.fileHandlerExecutor.set_parallel_environment(parallel=True, MPIrank=MPIrank)
@@ -348,8 +347,10 @@ else:
     tlog.info("The solver failed for some reason.")
     tlog.info("The residual at the end is {}".format(solver.errHistoryFinal[-1]))
     
+pi = solver.profiles['pi'] # finished solution
 tlog.info("The profile at the end is:")
-tlog.info("{}".format(solver.profile))
+
+tlog.info("{}".format(pi))
 
 endTime = time.time()
 durationHMS = tango.utilities.util.duration_as_hms(endTime - startTime)
