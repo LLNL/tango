@@ -207,11 +207,12 @@ class TangoHistoryHandler(Handler):
         
         # initialize data storage
         self.countStoredIterations = 0    # how many iterations have been stored so far
-        # create a new hdf5 file
-        self._create_file(initialData)
     
     def execute(self, data, iterationNumber):
         # open the hdf5 file and store the data
+        if self.countStoredIterations == 0:
+            self._create_file(self.initialData)
+        
         with self._get_file() as f:
             if self.countStoredIterations == 0:
                 self._initialize_datasets_on_first_use(f, data)
