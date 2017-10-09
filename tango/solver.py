@@ -359,7 +359,8 @@ class Solver(object):
             data[label] = {}
             data[label]['profile'] = profiles[label]
             data[label]['normalizedResid'] = normalizedResids[label]
-            data[label] = self._merge_two_dicts(data[label], extradataAllFields[label])
+            if extradataAllFields is not None:
+                data[label] = self._merge_two_dicts(data[label], extradataAllFields[label])
             # store Hdata into data
             self._pkgdata_HCoeffs_helper(data, HCoeffsAllFields, label)            
         return data

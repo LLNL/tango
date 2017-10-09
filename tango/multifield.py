@@ -189,6 +189,8 @@ class ComputeAllHAllFields(object):
             # get the turbulent flux and transform into H coefficients
             if self.turbhandler is not None:
                 (HCoeffsTurbAllFields, extradataAllFields) = self.turbhandler.turbflux_to_Hcoeffs_multifield(self.fields, profiles)
+            else:
+                extradataAllFields = None
         else:
             assert HCoeffsTurbAllFields is not None, 'must provide HCoeffsTurbAllFields when using computeTurbulence==False'
             extradataAllFields = None
