@@ -49,6 +49,10 @@ yN1 yN2 .. yNM    .....  M entries in the line representing the time dependence 
 .....
 
 
+------
+Also note that when the species name is electrons, the comment lines say G_es,elec instea of G_es,electrons.
+
+
 -----------------------------------------------
 Example usage:
 filename = 'fluxprof2D.dat'

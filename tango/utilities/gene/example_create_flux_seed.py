@@ -8,7 +8,7 @@ import numpy as np
 from tango.utilities.gene import read_fluxprof2D
 from tango import genecomm_unitconversion
 
-filename = '/path/to/fluxprof2D_ions.dat'
+filename = '/path/to/fluxprof2Dions.dat'
 speciesName = 'ions'
 
 fluxData = read_fluxprof2D.ProfileFileData(filename, speciesName)
@@ -45,3 +45,7 @@ np.savetxt('heat_flux_seed_ions', np.transpose([qhat_timeavg]))
 # ghatSI = genecomm_unitconversion.particleflux_gene_to_SI(ghat, nref, Tref, mref, Bref, Lref)
 # ghat_timeavg = np.trapz(ghatSI, time, axis=0) / (time[-1] - time[0])
 # np.savetxt('particle_flux_seed_ions', np.transpose([ghat_timeavg]))
+
+# if reading electron file is desired:
+# filename = '/path/to/fluxprof2Delectrons.dat'
+# speciesName = 'elec'

@@ -145,7 +145,7 @@ def scenario2():
     
 def ke_scenario1():
     """Kinetic Electrons: Scenario 1 for x/a, x/rhoref, Ti, ni, Te, ne"""
-    numRadialPts = 180
+    numRadialPts = 360
     minorRadius = 0.594  # a
     majorRadius = 1.65  # R0
     inverseAspectRatio = minorRadius / majorRadius
