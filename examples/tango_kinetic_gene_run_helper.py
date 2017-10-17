@@ -7,6 +7,24 @@ Specifying initial profiles and source
 from __future__ import division, absolute_import
 import numpy as np
 
+from tango.utilities.gene import write_profiles
+
+def read_seed_turb_flux(filenameFluxSeed):
+    """Read in a file that contains a turbulent flux profile (heat flux for either species, or particle flux) to use as the EWMA seed.
+    
+    The seed should probably come from a long run of GENE (long compared to a single iteration here) so that the flux is averaged over
+    many cycles.  The flux here is <Q dot grad psi> or <Gamma dot grad psi>, not V' * <Q dot grad psi>, because that is what Tango uses.
+    
+    Inputs:
+      filenameFluxSeed      path of file containing a flux seed (string)
+    Outputs:
+      fluxProfile           turbulent flux profile as a function of radius (1D array)
+    """
+    fluxProfile = np.loadtxt(filenameFluxSeed, unpack=True)
+    return fluxProfile
+
+# ============================================================================================================== #
+# INITIAL CONDITIONS
 def density_initial_condition(rho):
     """Initial ion density profile
     Inputs:
@@ -17,20 +35,14 @@ def density_initial_condition(rho):
     minorRadius = 0.594  # a
     majorRadius = 1.65  # R0
     inverseAspectRatio = minorRadius / majorRadius
-    rho0 = 0.5
     
-    # density profile
-    n0 = 3.3e19;     # in SI, m^-3
-    kappa_n = 2.22;  # R0 / Ln    
-    deltar = 0.5
-    rhominus = rho - rho0 + deltar/2
-    deltan = 0.1
-    n = n0 * np.exp( -kappa_n * inverseAspectRatio * (rho - rho0 - deltan * (np.tanh(rhominus/deltan) - np.tanh(deltar/2/deltan))))
-    
-    # set n to a constant for rho < rho0-deltar/2
-    ind = int(np.abs(rho - (rho0 - deltar/2)).argmin())
-    ind2 = (rho < (rho0-deltar/2))
-    n[ind2] = n[ind];
+    # Density profile
+    kappa_n = 2.4
+    delta_n = 0.5
+    Delta_n = 0.1
+    rho0_n = 0.5
+    n0 = 3e19
+    n = write_profiles.base_profile_shape(rho, kappa_n, delta_n, Delta_n, rho0_n, n0, inverseAspectRatio)
     return n
     
 def ion_temperature_initial_condition(rho):
@@ -38,24 +50,22 @@ def ion_temperature_initial_condition(rho):
     Inputs:
       rho       normalized radial coordinate rho=r/a (array)
     Outputs:
-      T         temperature profile in SI (array)
+      Ti        ion temperature profile in SI (array)
     """
-    e = 1.60217662e-19          # electron charge
+    minorRadius = 0.594  # a
+    majorRadius = 1.65  # R0
+    inverseAspectRatio = minorRadius / majorRadius
     
-    kappa_T = 6.96
-    deltar = 0.9
-    rho0 = 0.5
-    rhominus = rho - rho0 + deltar/2
-    deltaT = 0.1
-
-    e = 1.60217662e-19
-    T0 = 1000*e
-    invasp = 0.36
-    T = T0 * np.exp( -kappa_T * invasp * (rho - rho0 - deltaT * (np.tanh(rhominus/deltaT) - np.tanh(deltar/2/deltaT))));
-    ind = int(np.abs(rho - (rho0 - deltar/2)).argmin())
-    ind2 = (rho < (rho0-deltar/2));
-    T[ind2] = T[ind];
-    return T
+    e = 1.60217662e-19          # electron charge
+    # Ion temperature profile
+    kappa_i = 6.9
+    delta_i = 0.9
+    Delta_i = 0.1
+    rho0_i = 0.5
+    Ti0 = 1
+    Ti = write_profiles.base_profile_shape(rho, kappa_i, delta_i, Delta_i, rho0_i, Ti0, inverseAspectRatio)
+    Ti *= 1000 * e      # convert from keV to SI
+    return Ti
     
 def electron_temperature_initial_condition(rho):
     """Initial electron temperature profile
@@ -64,63 +74,92 @@ def electron_temperature_initial_condition(rho):
     Outputs:
       T         temperature profile in SI (array)
     """
-    # return T
-    pass
-
-
-def density_source():
-    pass
-
-def ion_heat_source():
-    pass
-
-def electron_heat_source():
-    pass
-
-def collisional_energy_exchange():
-    pass
-# define sources for density, ion pressure, and electron pressure
-# define collisional energy exchange term    
-
-
-## aaa: p
-### test lol
-#### hi wow
-#### Below: source for Tango 1.0
-
-def source_fhat(rho):
-    """Provide the function fhat in the source term V'S = A fhat(rho)
+    minorRadius = 0.594  # a
+    majorRadius = 1.65  # R0
+    inverseAspectRatio = minorRadius / majorRadius
     
-    Inputs:
-      rho           radial coordinate rho=r/a (array)
-    Outputs:
-      fhat          output (array)
-    """
+    e = 1.60217662e-19          # electron charge
+    # Electron temperature profile
+    kappa_e = 7.3
+    delta_e = 0.9
+    Delta_e = 0.1
+    rho0_e = 0.5
+    Te0 = 1
+    Te = write_profiles.base_profile_shape(rho, kappa_e, delta_e, Delta_e, rho0_e, Te0, inverseAspectRatio)
+    Te *= 1000 * e      # convert from keV to SI
+    return Te
+
+# ============================================================================================================== #
+# SOURCES
+def fn_hat(rho):
+    """Return the density source V' * S_n."""
+    An = 2.8628e22  # amplitude
+    fn = np.zeros_like(rho)
     rho_a = 0.2
-    rho_b = 0.4
-    rho0 = 0.3
-    w = 0.05
-    
-    fhat = np.zeros_like(rho)
+    rho_b = 0.6
+    rho_0 = 0.4
+    w = 0.1
     ind = (rho > rho_a) & (rho < rho_b)
-    fhat[ind] = np.exp( -(rho[ind] - rho0)**2 / w**2)
-    return fhat
-
-def source_H7(r, minorRadius, majorRadius, A):
-    """Provide the source term V'S to the transport equation.  The contribution to H7 is V'S.
-    
-    The source is written as V'S = A * f(r) = A * fhat(r/a)
-    
-    Inputs:
-      r             radial coordinate r, in m (array)
-      minorRadius   minor radius a, in m (scalar)
-      majorRadius   major radius R0, in m (scalar)
-      A             amplitude in SI of V'S, in SI (scalar)
-    Outputs:
-      H7contrib     contribution to H7 (=V'S) (array)
-    """
-    rho = r / minorRadius
-    fhat = source_fhat(rho)
-    H7contrib = A * fhat
-    return H7contrib
+    fn[ind] = An * np.exp( -(rho[ind] - rho_0)**2 / w**2 )
+    return fn
         
+def fi_hat(rho):
+    """Return the ion heat source V' S_i."""
+    Ai = 2.0409e7 # amplitude
+    fi = np.zeros_like(rho)
+    rho_a = 0.2
+    rho_b = 0.8
+    rho_0 = 0.4
+    
+    ind1 = (rho > rho_a) & (rho < rho_0)
+    w1 = 0.1
+    fi[ind1] = Ai * np.exp( -(rho[ind1] - rho_0)**2 / w1**2)
+    
+    ind2 = (rho >= rho_0) & (rho < rho_b)
+    w2 = 0.18
+    fi[ind2] = Ai * np.exp( -(rho[ind2] - rho_0)**2 / w2**2)
+    return fi
+    
+def fe_hat(rho):
+    """Return the electron heat source V' S_e."""
+    Ae = 1.9004e7 # amplitude
+    fe = np.zeros_like(rho)
+    rho_a = 0.3
+    rho_b = 0.8
+    rho_0 = 0.55
+    
+    ind = (rho > rho_a) & (rho < rho_b)
+    w = 0.1
+    fe[ind] = Ae * np.exp( -(rho[ind] - rho_0)**2 / w**2)
+    return fe
+    
+# ============================================================================================================== #
+# Other physics
+def convert_Te_to_eV(n, pe):
+    """Return the electron temperature in eV.
+    Inputs:
+      n     density in m^-3 (array)
+      pe    electron pressure in SI (array)
+    Outputs:
+      Te    electron temperature in eV (array)
+    """
+    e = 1.60217662e-19
+    Te_SI = pe / n
+    Te = Te_SI / e
+    return Te
+
+def nu_E(n, Te):
+    """Return the collisional energy exchange frequency [assuming ni=ne].
+    Inputs:
+      n     density in m^-3 (array)
+      Te    electron temperature in eV (array)
+    Outputs:
+      nu    collisional energy exchange frequency in s^-1 (array)
+    """
+    # Z = 1
+    # loglambda = 10
+    # mu = 2
+    # nu = 3.2e-15 * Z**2 * loglambda / (mu * Te**(3/2)) * n
+    ### For now, neglect collisional energy exchange and set nu=0
+    nu = np.zeros_like(n)
+    return nu    
