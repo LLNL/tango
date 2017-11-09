@@ -14,6 +14,8 @@ from __future__ import division
 import numpy as np
 import scipy.interpolate
 
+import tango.tango_logging as tlog
+
 try:
     import gene_tango
 except ImportError:
@@ -140,12 +142,12 @@ def call_gene_low_level(
     magneticShear = calculate_magnetic_shear(safetyFactor, rho)
     ####################### End Boilerplate ######################
     
-    #logging.info('Running GENE...')
+    tlog.info('Running GENE...')
     (MPIrank, dVdxHat, sqrt_gxx, avgParticleFluxHatAllSpecies, avgHeatFluxHatAllSpecies, temperatureOutput, densityOutput) = gene_tango.gene_tango(
                checkpointSuffix, electrostatic, simulationTime, rho, temperatureHatAllSpeciesGENE, densityHatAllSpeciesGENE, massGENE, chargeGENE, toroidalVelocityGENE,
                rhoStar, Tref, nref, safetyFactor, magneticShear, inverseAspectRatio, Lref, Bref,
                numRadialGridPts, numSpecies)
-    #logging.info('GENE finished!')
+    tlog.info('GENE finished!')
     
     # convert from Fortran-contiguous to C-contiguous arrays for rest of Python code
     dVdxHat = np.ascontiguousarray(dVdxHat) # for a 1D array, doesn't actually do anything...

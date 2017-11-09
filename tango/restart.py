@@ -1,3 +1,12 @@
+"""
+restart
+
+Module for providing restart capability to Tango.  So far, can restart *within* a timestep, but not for separate timesteps.
+
+The module will read in a restart file (which is the .hdf5 file saved during the previous Tango run), load the pertinent
+data, and provide the necessary startup to continue with the next Tango iteration.
+"""
+
 from __future__ import division, absolute_import
 import numpy as np
 import os
@@ -22,8 +31,6 @@ def read_metadata_from_previousfile(filename):
         old_turbFluxesEWMA = {}
         for label in labels:
             grp = f[label]
-            print(label)
-            print(grp.attrs.keys())
             old_profiles_mminus1[label] = grp.attrs['profile_mminus1']
             old_profiles[label] = grp['profile'][-1]
             old_profilesEWMA[label] = grp['profileEWMATurbGrid'][-1]

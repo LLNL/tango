@@ -144,7 +144,7 @@ class Solver(object):
         
         index = self.countStoredIterations
             
-        # iterate through all the fields, compute all the H's
+        # iterate through all the fields, compute all the H's [runs the turbulence calculation]
         (HCoeffsAllFields, HCoeffsTurbAllFields, extradataAllFields) = self.compute_all_H_all_fields(self.t, self.x, self.profiles)
     
         # create fieldGroups from fields as prelude to the iteration step
