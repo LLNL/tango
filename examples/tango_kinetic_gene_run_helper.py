@@ -93,7 +93,7 @@ def electron_temperature_initial_condition(rho):
 # SOURCES
 def fn_hat(rho):
     """Return the density source V' * S_n."""
-    An = 2.8628e22  # amplitude
+    An = 4 * 2.8628e22  # amplitude... with the factor of 4, 1.2e22 particles/second of input fueling
     fn = np.zeros_like(rho)
     rho_a = 0.2
     rho_b = 0.6
@@ -105,7 +105,7 @@ def fn_hat(rho):
         
 def fi_hat(rho):
     """Return the ion heat source V' S_i."""
-    Ai = 2.0409e7 # amplitude
+    Ai = 6 * 2.0409e7 # amplitude... with the factor of 6, 18 MW of input power
     fi = np.zeros_like(rho)
     rho_a = 0.2
     rho_b = 0.8
@@ -122,7 +122,7 @@ def fi_hat(rho):
     
 def fe_hat(rho):
     """Return the electron heat source V' S_e."""
-    Ae = 1.9004e7 # amplitude
+    Ae = 6 * 1.9004e7 # amplitude... with the factor of 6, 12 MW of input power
     fe = np.zeros_like(rho)
     rho_a = 0.3
     rho_b = 0.8

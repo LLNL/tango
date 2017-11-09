@@ -3,7 +3,7 @@ Checklist for a Gene-Tango run:
 GENE parameters file
     diagdir
     read_checkpoint [and copy and rename a start file to checkpoint_000]
-    parallelization / number of processors
+    parallelization / number of processors [perform auto-tuning ahead of time; do not include any -1 in a Tango run]
 
 submit.cmd file
     time limit
@@ -19,7 +19,7 @@ Tango python file
     etc.
     
 Rule of thumb for theta parameters (which determine the diffusive/convective split) in LoDestro Method:
-    --for field U.  set dpdxthreshold = Geometric_Avg[U] * 4e4    (where the geometric average is over the estimated min and max values)
+    --for field U.  set dpdxthreshold = Geometric_Avg[U] * 80    (where the geometric average is over the estimated min and max values)
     --Dmin = 1e-5, Dmax = 1e3?  
     --these aren't heavily tested and may well need to be modified.
     --probably a logarithmic derivative should be used for thresholding, but has not been implemented yet
@@ -29,6 +29,8 @@ from __future__ import division, absolute_import
 import numpy as np
 import time
 
+import gene_tango # This must come before other tango imports, else it crashes on quartz!
+
 # Tango imports... should simplify these so I'm not importing them all separately!
 import tango
 import tango.gene_startup
@@ -36,14 +38,18 @@ import tango.smoother
 import tango.genecomm_unitconversion
 import tango.tango_logging as tlog
 import tango.utilities.util # for duration_as_hms
-import gene_tango
-from tango.examples import tango_kinetic_gene_run_helper as helper
+import tango_kinetic_gene_run_helper as helper  # helper module needs to be kept in same directory
 
 # constants
 MAXITERS = 50
 # DIAGDIR = '/scratch2/scratchdirs/jbparker/genedata/prob##/'   # scratch on Edison
+# DIAGDIR = '/global/cscratch1/sd/jbparker/genecori/prob##/'  # scratch on cori
 DIAGDIR = '/p/lscratchh/parker68/q_gene/prob##/' # scratch on quartz
 SIMTIME = 50 # GENE simulation time per iteration, in Lref/cref
+
+thetaParamsPi = {'Dmin': 1e-5,  'Dmax': 1e3,  'dpdxThreshold': 4e5}
+thetaParamsPe = {'Dmin': 1e-5,  'Dmax': 1e3,  'dpdxThreshold': 4e5}
+thetaParamsN = {'Dmin': 1e-5,  'Dmax': 1e3,  'dpdxThreshold': 2.4e20}
 
 def initialize_iteration_parameters():
     maxIterations = MAXITERS
@@ -213,7 +219,7 @@ def problem_setup():
     electronPressureICTango = densityICTango * electronTemperatureICTango
     
     # specify species masses and charges
-    mass = np.array([2.0, 1.0/100])
+    mass = np.array([2.0, 2.0/100])
     charge = np.array([1, -1])
     
     # specify safety factor
@@ -243,7 +249,7 @@ def problem_setup():
     ## *************************** ##
     # set up for density equation
     compute_all_H_n = ComputeAllH_n(VprimeTango, minorRadius)
-    lm_n = tango.lodestro_method.lm(lmParams['EWMAParamTurbFlux'], lmParams['EWMAParamProfile'], lmParams['thetaParams'])
+    lm_n = tango.lodestro_method.lm(lmParams['EWMAParamTurbFlux'], lmParams['EWMAParamProfile'], thetaParamsN)
     # seed the EWMA for the turbulent particle flux
     particleFluxSeed = helper.read_seed_turb_flux('particle_flux_seed_ions')
     lm_n.set_ewma_turb_flux(particleFluxSeed)
@@ -255,7 +261,7 @@ def problem_setup():
     ## *************************** ##
     # set up for ion pressure equation
     compute_all_H_pi = ComputeAllH_pi(VprimeTango, minorRadius)
-    lm_pi = tango.lodestro_method.lm(lmParams['EWMAParamTurbFlux'], lmParams['EWMAParamProfile'], lmParams['thetaParams'])
+    lm_pi = tango.lodestro_method.lm(lmParams['EWMAParamTurbFlux'], lmParams['EWMAParamProfile'], thetaParamsPi)
     # seed the EWMA for the turbulent ion heat flux
     ionHeatFluxSeed = helper.read_seed_turb_flux('heat_flux_seed_ions')
     lm_pi.set_ewma_turb_flux(ionHeatFluxSeed)
@@ -267,7 +273,7 @@ def problem_setup():
     ## *************************** ##
     # set up for electron pressure equation
     compute_all_H_pe = ComputeAllH_pe(VprimeTango, minorRadius)
-    lm_pe = tango.lodestro_method.lm(lmParams['EWMAParamTurbFlux'], lmParams['EWMAParamProfile'], lmParams['thetaParams'])
+    lm_pe = tango.lodestro_method.lm(lmParams['EWMAParamTurbFlux'], lmParams['EWMAParamProfile'], thetaParamsPe)
     # seed the EWMA for the turbulent electron heat flux
     electronHeatFluxSeed = helper.read_seed_turb_flux('heat_flux_seed_electrons')
     lm_pe.set_ewma_turb_flux(electronHeatFluxSeed)
@@ -286,25 +292,22 @@ def problem_setup():
 
     
 class UserControlFunc(object):
-    def __init__(self, turbhandler):
-        self.turbhandler = turbhandler
+    def __init__(self, densityICTango):
+        self.densityICTango = densityICTango
     def __call__(self, solver):
         """
         User Control Function for the solver.
         
-        Here, modify the EWMA paramater as the iteration number increases to converge quickly at the beginning and then to get more
-        averaging towards the end.
+        Here, reset the density profile to its initial condition.  This has the effect of preventing
+        the density from evolving, so Tango should act as if density is not being evolved at all through
+        a transport equation.
         
         Inputs:
           solver            tango Solver (object)
         """
-        iterationNumber = solver.l
-        if iterationNumber == 50:
-            self.turbhandler.set_ewma_params(0.1, 0.1)
-            # run for 2.5/EWMA = 25 iterations
-        if iterationNumber == 75:
-            self.turbhandler.set_ewam_params(0.03, 0.03)
-            # run for 2.5/EWMA = 83 iterations
+        iterationNumber = solver.iterationNumber
+        if iterationNumber < 50:
+            solver.profiles['n'] = self.densityICTango
     
 # ************************************************** #
 ####              START OF MAIN PROGRAM           ####
@@ -334,9 +337,10 @@ filenameTangoHistory = basename + '_s{}'.format(setNumber) + '.hdf5'
 geneFluxModel.set_simulation_time(SIMTIME)
 
 # initialize the user control function, if applicable.  If using it, then it needs to be passed as a parameter when intializaing solver
-# user_control_func = UserControlFunc(turbhandler)
+densityICTango = fields[0].profile_mminus1
+user_control_func = UserControlFunc(densityICTango)
 
-solver = tango.solver.Solver(L, rTango, tArray, maxIterations, tol, compute_all_H_all_fields, fields)
+solver = tango.solver.Solver(L, rTango, tArray, maxIterations, tol, compute_all_H_all_fields, fields, user_control_func=user_control_func)
 
 
 # Add the file handlers
