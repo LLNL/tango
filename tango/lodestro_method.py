@@ -365,6 +365,8 @@ class FluxSplit(object):
             
         What to use for Dmin, Dmax, and dpdxThreshold will depend on the problem.  The numerical values will further depend on what
           units are used to represent the dependent and independent variables.
+          
+        Recent update: instead of theta falling to 0 at Dhat=Dmax, let theta=1/2 at for Dhat >= Dmax
         """
         Dmin = thetaParams['Dmin']  # scalar
         Dmax = thetaParams['Dmax']  # scalar
@@ -375,10 +377,10 @@ class FluxSplit(object):
         theta[ind1] = 0
         
         ind2 = (abs(dpdx) < dpdxThreshold) & (DHat >= Dmin) & (DHat <= Dmax)
-        theta[ind2] = (Dmax - DHat[ind2]) / (Dmax - Dmin)
+        theta[ind2] = (1 + (Dmax - DHat[ind2]) / (Dmax - Dmin)) / 2
         
         ind3 = (abs(dpdx) < dpdxThreshold) & (DHat > Dmax)
-        theta[ind3] = 0
+        theta[ind3] = 0.5
         
         assert np.count_nonzero((theta >= 0) & (theta <= 1)) == np.size(theta), 'some theta is not between 0 and 1'
         return theta
