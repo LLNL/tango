@@ -28,6 +28,7 @@ Rule of thumb for theta parameters (which determine the diffusive/convective spl
 from __future__ import division, absolute_import
 import numpy as np
 import time
+import sys
 
 import gene_tango # This must come before other tango imports, else it crashes on quartz!
 
@@ -251,9 +252,6 @@ def problem_setup():
     # set up for density equation
     compute_all_H_n = ComputeAllH_n(VprimeTango, minorRadius)
     lm_n = tango.lodestro_method.lm(lmParams['EWMAParamTurbFlux'], lmParams['EWMAParamProfile'], thetaParamsN)
-    # seed the EWMA for the turbulent particle flux
-    particleFluxSeed = helper.read_seed_turb_flux('particle_flux_seed_ions')
-    lm_n.set_ewma_turb_flux(particleFluxSeed)
     # create the field
     field_n = tango.multifield.Field(
             label='n', rightBC=densityRightBC, profile_mminus1=densityICTango, compute_all_H=compute_all_H_n,
@@ -263,9 +261,6 @@ def problem_setup():
     # set up for ion pressure equation
     compute_all_H_pi = ComputeAllH_pi(VprimeTango, minorRadius)
     lm_pi = tango.lodestro_method.lm(lmParams['EWMAParamTurbFlux'], lmParams['EWMAParamProfile'], thetaParamsPi)
-    # seed the EWMA for the turbulent ion heat flux
-    ionHeatFluxSeed = helper.read_seed_turb_flux('heat_flux_seed_ions')
-    lm_pi.set_ewma_turb_flux(ionHeatFluxSeed)
     # create the field, coupled to pe
     field_pi = tango.multifield.Field(
             label='pi', rightBC=ionPressureRightBC, profile_mminus1=ionPressureICTango, compute_all_H=compute_all_H_pi,
@@ -275,9 +270,6 @@ def problem_setup():
     # set up for electron pressure equation
     compute_all_H_pe = ComputeAllH_pe(VprimeTango, minorRadius)
     lm_pe = tango.lodestro_method.lm(lmParams['EWMAParamTurbFlux'], lmParams['EWMAParamProfile'], thetaParamsPe)
-    # seed the EWMA for the turbulent electron heat flux
-    electronHeatFluxSeed = helper.read_seed_turb_flux('heat_flux_seed_electrons')
-    lm_pe.set_ewma_turb_flux(electronHeatFluxSeed)
     # create the field, coupled to pe
     field_pe = tango.multifield.Field(
             label='pe', rightBC=electronPressureRightBC, profile_mminus1=electronPressureICTango, compute_all_H=compute_all_H_pe,
@@ -335,9 +327,15 @@ restartfile = tango.restart.check_if_should_restart(basename)   # returns path o
 
 if restartfile: # Restart file exists
     (setNumber, startIterationNumber, t, timestepNumber, old_profiles, old_profilesEWMA, old_turbFluxesEWMA) = tango.restart.read_metadata_from_previousfile(restartfile)
+    # if the density was artificially controlled in the last run, then the density saved to Tango will be incorrected.
+    # Fix that here if necessary.  Otherwise keep line commented.
+    # old_profiles['n'] = densityICTango
+    
     tango.restart.set_ewma_iterates(fields, old_profilesEWMA, old_turbFluxesEWMA)
     initialData = tango.handlers.TangoHistoryHandler.set_up_initialdata(setNumber, rTango, rGene, t, fields)
 else: # No restartfile exists.  Set up for first Tango run
+    tlog.info('Error.  Should not be here.  Stopping')
+    sys.exit(1)
     (setNumber, startIterationNumber, t, timestepNumber) = (0, 0, tArray[1], 1)
     initialData = tango.handlers.TangoHistoryHandler.set_up_initialdata(setNumber, rTango, rGene, t, fields)
 

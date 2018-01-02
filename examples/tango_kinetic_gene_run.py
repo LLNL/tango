@@ -16,6 +16,7 @@ Tango python file
     GENE simulation time per iteration
     density profile
     user_control_func
+    species masses (does it come from Python, rather than GENE)
     etc.
     
 Rule of thumb for theta parameters (which determine the diffusive/convective split) in LoDestro Method:
