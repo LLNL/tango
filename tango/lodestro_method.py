@@ -265,9 +265,19 @@ class FluxSplit(object):
         """Class constructor
         Inputs:
           thetaParams              dict containing parameters to be used in the ftheta function.
+          
+        If a custom ftheta is passed in (a callable that is the value of thetaParams['custom_ftheta']), then it must have the signature
+        custom_ftheta(Dhat, dpdx, thetaParams) to match default_ftheta.  If this needs to be adjusted, then the signature of default_ftheta
+        will have to be changed as well.
         """
         # define/initialize internal varibales
         self.thetaParams = thetaParams
+        
+        # if a custom ftheta has been passed in, set the internal ftheta to use that; otherwise use the default.
+        if 'custom_ftheta' in thetaParams and callable(thetaParams['custom_ftheta']):
+            self.ftheta = thetaParams['custom_ftheta']
+        else:
+            self.ftheta = self._default_ftheta
     
     def flux_to_transport_coeffs(self, flux, p, dx):
         """Given the current iterate of the (averaged/relaxed) flux, use the LoDestro Method to compute effective transport coefficients
@@ -338,7 +348,7 @@ class FluxSplit(object):
         DHat[dpdx==0] = 0     # get rid of infinities resulting from divide by zero
         cHat = flux / p
         
-        theta = self._ftheta(DHat, dpdx, self.thetaParams)
+        theta = self.ftheta(DHat, dpdx, self.thetaParams)
         # uncomment the following line to turn off convective terms and use only diffusive terms
         # theta[:] = 1        
         
@@ -350,7 +360,7 @@ class FluxSplit(object):
         return (D, c, data)
         
     @staticmethod
-    def _ftheta(DHat, dpdx, thetaParams):
+    def _default_ftheta(DHat, dpdx, thetaParams):
         """Scheme to calculate theta, the parameter that determines the split between diffusive and convective pieces in representations
           of the flux.
         
@@ -367,6 +377,11 @@ class FluxSplit(object):
           units are used to represent the dependent and independent variables.
           
         Recent update: instead of theta falling to 0 at Dhat=Dmax, let theta=1/2 at for Dhat >= Dmax
+        
+        For _default_ftheta, dict thetaParams must include:
+            Dmin
+            Dmax
+            dpdxThreshold
         """
         Dmin = thetaParams['Dmin']  # scalar
         Dmax = thetaParams['Dmax']  # scalar
