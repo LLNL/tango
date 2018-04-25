@@ -12,7 +12,7 @@ class Field(object):
     """
     def __init__(self, label=None, rightBC=None, profile_mminus1=None, coupledTo=None, compute_all_H=None, gridMapper=None, lodestroMethod=None):
         if label is None:
-            raise ValueError, 'label is a required input when creating a Field.'
+            raise ValueError('label is a required input when creating a Field.')
         self.label = label
         self.rightBC = rightBC
         self.profile_mminus1 = profile_mminus1
@@ -42,7 +42,7 @@ def get_field_by_label(fields, label):
     """
     field = next((f for f in fields if f.label == label), None)
     if field is None:
-        raise ValueError, 'field corresponding to the given label is not found.'
+        raise ValueError('field corresponding to the given label is not found.')
     return field
         
 def check_fields_label(fields):
@@ -95,15 +95,15 @@ def check_fields_initialize(fields):
     Meant to be run once.
     """
     if not check_fields_label(fields):
-        raise ValueError, 'labels of fields are not unique.'
+        raise ValueError('labels of fields are not unique.')
     if not check_fields_rightBC(fields):
-        raise ValueError, 'rightBC must be a scalar for each field.'
+        raise ValueError('rightBC must be a scalar for each field.')
     if not check_fields_profile_mminus1(fields):
-        raise ValueError, 'profile_mminus1 must have the same length for all fields.'
+        raise ValueError('profile_mminus1 must have the same length for all fields.')
     if not check_fields_coupled_to(fields):
-        raise ValueError, 'all fields must either be coupledTo None or a partner.'
+        raise ValueError('all fields must either be coupledTo None or a partner.')
     if not check_fields_compute_all_H(fields):
-        raise ValueError, 'all fields must have a callable compute_all_H.'
+        raise ValueError('all fields must have a callable compute_all_H.')
     
 class HCoefficients(object):
     """data container class for H coefficients.

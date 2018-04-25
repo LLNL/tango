@@ -276,8 +276,8 @@ class TangoHistoryHandler(Handler):
         # create the datasets for the 0D field data that updates each iteration
         varNamesAtRoot = (varName for varName in data if not isinstance(data[varName], dict))
         for varName in varNamesAtRoot:
-            if isinstance(data[varName], np.int):
-                f.create_dataset(varName, (0,), maxshape=(self.maxCount,), dtype=np.int)
+            if isinstance(data[varName], np.int) or isinstance(data[varName], np.integer):
+                f.create_dataset(varName, (0,), maxshape=(self.maxCount,), dtype=np.int32)
             else: # assume float
                 f.create_dataset(varName, (0,), maxshape=(self.maxCount,), dtype=np.float64)
         

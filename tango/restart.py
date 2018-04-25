@@ -90,7 +90,7 @@ def check_if_should_restart(basename=None):
                 basename = h5filestarts[0]
                 filename = find_latest_savefile(basename)
             else:
-                raise ValueError, 'No basename provided, and multiple basenames for hdf5 files exist in the current directory {}.'.format(cwd)
+                raise ValueError('No basename provided, and multiple basenames for hdf5 files exist in the current directory {}.'.format(cwd))
     else:
         filename = find_latest_savefile(basename)
     return filename
@@ -125,7 +125,7 @@ def combine_savefiles(basename='tangodata'):
     start = basename + '_s'
     h5files = [fname for fname in files if fname.endswith('.hdf5') and fname.startswith(start)]
     if not h5files:
-        raise ValueError, 'no files found.'
+        raise ValueError('no files found.')
     sortedh5files = sorted(h5files) # sorted list of filenames, in increasing number    
     
     # copy the first file, first
