@@ -43,7 +43,13 @@ def write(filename, xOvera, xOverRhoRef, T, n):
     """
     header = 'x/a      x/rhoref     T     n' + '\n' + ''  # hash signs are automatically added by default to all header lines
     np.savetxt(filename, np.transpose([xOvera, xOverRhoRef, T, n]), header=header)
-    
+
+def compute_x_over_rhoref(xOvera, rhoStar):
+    """
+    x/rhoref = x/a * a/rhoRef = (x/a) / rhostar
+    """
+    xOverRhoRef = xOvera / rhoStar
+    return xOverRhoRef
     
 def scenario1():
     """Scenario 1 for x/a, x/rhoref, T, n"""
@@ -94,10 +100,7 @@ def scenario1():
     
     
 def scenario2():
-    """Scenario 1 for x/a, x/rhoref, T, n
-    
-    Note: x/rhoref = x/a * a/rhoRef = (x/a) / rhostar
-    """
+    """Scenario 2 for x/a, x/rhoref, T, n"""
     numRadialPts = 240
     minorRadius = 1  # a
     majorRadius = 3  # R0
@@ -142,6 +145,38 @@ def scenario2():
     T[ind2] = T[ind];
     
     return (xOvera, xOverRhoRef, T, n)    
+
+def scenario3():
+    """Scenario 3 for x/a, x/rhoref, T, n.  CHEASE, DIII-D-like run"""
+    numRadialPts = 180
+    minorRadius = 0.741206  # a, in m
+    majorRadius = 1.68  # R0, in m
+    inverseAspectRatio = minorRadius / majorRadius
+    
+    rhoMin = 0.1
+    rhoMax = 0.9
+    rho = np.linspace(rhoMin, rhoMax, numRadialPts)   # rho = x/a = r/a
+    xOvera = rho
+    rhoStar = 0.0034194220332098143
+    xOverRhoRef = xOvera / rhoStar
+    
+    # Density profile
+    kappa_n = 2.22
+    delta_n = 0.5
+    Delta_n = 0.1
+    rho0_n = 0.5
+    n0 = 3.3  # in 10^19 m^-3
+    n = base_profile_shape(rho, kappa_n, delta_n, Delta_n, rho0_n, n0, inverseAspectRatio)
+    
+    # Ion temperature
+    kappa_T = 6.96
+    delta_T = 0.9
+    Delta_T = 0.1
+    rho0_T = 0.5
+    T0 = 2.8
+    T = base_profile_shape(rho, kappa_T, delta_T, Delta_T, rho0_T, T0, inverseAspectRatio)
+    
+    return (xOvera, xOverRhoRef, T, n)
     
 def ke_scenario1():
     """Kinetic Electrons: Scenario 1 for x/a, x/rhoref, Ti, ni, Te, ne"""
