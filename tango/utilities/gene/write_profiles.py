@@ -23,6 +23,10 @@ def write_scenario1():
 def write_scenario2():
     (xOvera, xOverRhoRef, T, n) = scenario2()
     write('profiles_ions', xOvera, xOverRhoRef, T, n)
+    
+def write_scenario3():
+    (xOvera, xOverRhoRef, T, n) = scenario3()
+    write('profiles_ions', xOvera, xOverRhoRef, T, n)    
 
 def write_ke_scenario1():
     (xOvera, xOverRhoRef, Ti, ni, Te, ne) = ke_scenario1()
