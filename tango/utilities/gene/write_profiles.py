@@ -174,10 +174,10 @@ def scenario3():
     
     # Ion temperature
     kappa_T = 6.96
-    delta_T = 0.9
+    delta_T = 0.8
     Delta_T = 0.1
     rho0_T = 0.5
-    T0 = 2.8
+    T0 = 2.3
     T = base_profile_shape(rho, kappa_T, delta_T, Delta_T, rho0_T, T0, inverseAspectRatio)
     
     return (xOvera, xOverRhoRef, T, n)
