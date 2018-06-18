@@ -10,8 +10,8 @@ Some of the data CHEASE provides include
     --metric coefficients g11, g12, g21, g22 (grad psi dot grad psi, etc)
     --rho_toroidal (another flux quantity, normalized toroidal flux, that is often used as the radial coordinate within GENE)
     --safety factor
-    --profiles such as ion temperature, electron temperature, density, and their derivatives 
-    
+    --profiles such as ion temperature, electron temperature, density, and their derivatives
+
 This module reads the CHEASE file and provides an interface to providing the data that Tango needs.  Tango needs
     --radial coordinate grids psi and rho_tor.  In this module, rho_tor is just labeled 'x', since rho_tor is the default
           radial coordinate used by GENE for realistic magnetic geometry.  In the future this module could be made more
@@ -32,7 +32,7 @@ import scipy.interpolate
 
 class CheaseTangoData(object):
     """Output container to store the data read from a CHEASE file, then interpolated, and passed to Tango."""
-    def __init__(self, psi, x, dVdx, safetyFactor, dpsidx, gxxAvg, Bref, Lref):
+    def __init__(self, psi, x, dVdx, safetyFactor, dpsidx, gxxAvg, Bref, Lref, minorRadius):
         self.psi = psi
         self.x = x
         self.dVdx = dVdx
@@ -41,6 +41,7 @@ class CheaseTangoData(object):
         self.gxxAvg = gxxAvg
         self.Bref = Bref
         self.Lref = Lref
+        self.minorRadius = minorRadius
 
 class CheaseTangoProfiles(object):
     """Output container to store the temperature and density profiles read from a CHEASE file, then interpolated,
@@ -57,24 +58,31 @@ class CheaseTangoProfiles(object):
 
 #################################################################################################################
 # ------------------------ Functions for reading directly from the CHEASE hdf5 file --------------------------- #
+
+
 def get_reference_vals(f):
     """Return the magnetic field and major radius reference values.
-    
+
     Inputs:
       f             An open hdf5 chease file
-    
+
     Outputs:
       Bref          magnetic field on axis to be used as reference magnetic field (scalar)
       majorRadius   major radius to be used as reference length (scalar)
+      minorRadius   minor radius value, equal to rho_tor at the LCFS, which is the final value of rho_tor
     """
     Bref = f['data'].attrs['B0EXP']
     majorRadius = f['data'].attrs['R0EXP']
-    return (Bref, majorRadius)
-    
+    rhoTor = get_rhotor(f)
+    minorRadius = rhoTor[-1]
+    return (Bref, majorRadius, minorRadius)
+
+
 def get_rhotor(f):
     """Return the toroidal flux (1d array) as provided by CHEASE. One possible radial coordinate"""
     rhoTor = f['data/var1d/rho_tor'][:]
     return rhoTor
+
 
 def get_psi(f):
     """Return the poloidal flux divided by 2*pi (1D array) as provided by CHEASE.  Another possible radial
@@ -83,56 +91,66 @@ def get_psi(f):
     psi = f['data/grid/PSI'][:]
     return psi
 
+
 def get_chi(f):
     """Return the straight-field-line poloidal angle (1D array) as provided by CHEASE.  The poloidal coordinate."""
     chi = f['data/grid/CHI'][:]
     return chi
+
 
 def get_g11(f):
     """Return the metric coefficient g11 = grad psi dot grad psi on the CHEASE grid.  2D array of size nchi x npsi."""
     g11 = f['data/var2d/g11'][:]
     return g11
 
+
 def get_safety_factor(f):
     """Return the safety factor on the CHEASE grid.  1D array of size npsi."""
     safetyFactor = f['data/var1d/q'][:]
     return safetyFactor
+
 
 def get_jacobian(f):
     """Return the jacobian of the coordinate system on the CHEASE grid.  2D array of size nchi x npsi"""
     jacobian = f['data/var2d/Jacobian'][:]
     return jacobian
 
+
 def get_dVdpsi(f):
     """Return the differential volume dV/dpsi on the CHEASE grid.  1D array of size npsi."""
     dVdpsi = f['data/var1d/dVdpsi'][:]
     return dVdpsi
+
 
 def get_dpsidrhotor(f):
     """Return dpsi / drhotor = dpsi/dx on the CHEASE grid.  1D array of size npsi."""
     dpsidrhotor = f['data/var1d/dpsidrhotor'][:]
     return dpsidrhotor
 
+
 def get_Ti(f):
     """Return the ion temperature on the CHEASE grid.  1D array of size npsi."""
     Ti = f['data/var1d/Ti'][:]
     return Ti
+
 
 def get_Te(f):
     """Return the electron temperature on the CHEASE grid.  1D array of size npsi."""
     Te = f['data/var1d/Te'][:]
     return Te
 
+
 def get_ni(f):
     """Return the ion density on the CHEASE grid.  1D array of size npsi."""
     ni = f['data/var1d/ni'][:]
     return ni
 
+
 def get_ne(f):
     """Return the electron density on the CHEASE grid.  1D array of size npsi."""
     ne = f['data/var1d/ne'][:]
     return ne
-    
+
 #################################################################################################################
 # --------------------------- Functions for performing computations on CHEASE data ---------------------------- #    
 def integrate_2d_qty_in_chi(chi, qty):
@@ -360,14 +378,14 @@ def interpolate_gxxAvg(f, xTango):
     
 def gather_1d_interpolations(f, xTango):
     """Gather 1D interpolations to get the quantities needed by Tango onto the Tango grid.
-    
+
     Note, psiTango provides psi(x) evaluated at xTango.  In other words, this array holds the values of psi (the
     poloidal flux divided by 2 pi) at the radial locations corresponding to the entries of xTango.
-    
+
     Inputs:
       f                     An open hdf5 chease file
       xTango                Tango rho_tor grid (1D array)
-    
+
     Outputs:
       psiTango              poloidal flux / 2pi interpolated onto the Tango grid (1D array)
       dVdxTango             dV/dx interpolated onto the Tango grid (1D array)
@@ -388,11 +406,11 @@ def interpolate_profiles(f, xTango):
     Note that CHEASE provides both ion and electron density, as they can differ if impurities are present.  CHEASE
     also can provide zeff, the effective charge number of the ions.  However, currently this module does not use
     zeff
-    
+
     Inputs:
       f                         An open hdf5 chease file
       xTango                    Tango rho_tor grid (1D array)
-    
+
     Outputs:
       ionTemperatureTango       ion temperature interpolated onto the Tango grid (1D array)
       ionDensityTango           ion density interpolated onto the Tango grid (1D array)
@@ -404,49 +422,54 @@ def interpolate_profiles(f, xTango):
     ionDensityChease = get_ni(f)
     electronTemperatureChease = get_Te(f)
     electronDensityChease = get_ne(f)
-    
+
     ionTemperatureTango = interpolate_1d_qty(xChease, xTango, ionTemperatureChease)
     ionDensityTango = interpolate_1d_qty(xChease, xTango, ionDensityChease)
     electronTemperatureTango = interpolate_1d_qty(xChease, xTango, electronTemperatureChease)
     electronDensityTango = interpolate_1d_qty(xChease, xTango, electronDensityChease)
-    
+
     return (ionTemperatureTango, ionDensityTango, electronTemperatureTango, electronDensityTango)
-    
+
 #################################################################################################################
 # -------------------------------- Functions for interface used by Tango -------------------------------------- #
-    
-def get_chease_data_on_Tango_grid(filename, xTango):
+
+
+def get_chease_data_on_Tango_grid(filename, rhoTango):
     """Given a Tango grid, get CHEASE data needed by Tango, interpolated to the Tango grid.
-    
+
     This function does not return the temperature and density profiles.
-    
+
     Inputs:
       filename              path to CHEASE hdf5 file (string)
-      xTango                Tango rho_tor grid (1D array)
-        
+      rhoTango              Tango normalized rho_tor grid = rho_tor / rho_tor_max.  0 < rho < 1 (1D array)
+
     Outputs:
       cheaseTangoData       container for CHEASE data interpolated onto the Tango grid (CheaseTangoData)
     """
     with h5py.File(filename, 'r') as f:
+        (Bref, majorRadius, minorRadius) = get_reference_vals(f)
+        xTango = minorRadius * rhoTango
         (psi, dVdx, safetyFactor, dpsidx, gxxAvg) = gather_1d_interpolations(f, xTango)
-        (Bref, majorRadius) = get_reference_vals(f)
-    
+
     # in GENE, when using CHEASE, Lref is always set to the major radius from the CHEASE file.  We follow this here.
     Lref = majorRadius
-    cheaseTangoData = CheaseTangoData(psi, xTango, dVdx, safetyFactor, dpsidx, gxxAvg, Bref, Lref)
+    cheaseTangoData = CheaseTangoData(psi, xTango, dVdx, safetyFactor, dpsidx, gxxAvg, Bref, Lref, minorRadius)
     return cheaseTangoData
-    
-def get_chease_profiles_on_Tango_grid(filename, xTango):
+
+
+def get_chease_profiles_on_Tango_grid(filename, rhoTango):
     """Given a Tango grid, get CHEASE temperature and density profiles, interpolated on the Tango grid.
-    
+
     Inputs:
       filename              path to CHEASE hdf5 file (string)
       xTango                Tango rho_tor grid (1D array)
-      
+
     Outputs:
       cheaseTangoProfiles   container for CHEASE profiles interpolated onto the Tango grid (CheaseTangoProfiles)
     """
     with h5py.File(filename, 'r') as f:
+        (_, _, minorRadius) = get_reference_vals(f)
+        xTango = minorRadius * rhoTango
         (ionTemperature, ionDensity, electronTemperature, electronDensity) = interpolate_profiles(f, xTango)
         cheaseTangoProfiles = CheaseTangoProfiles(xTango, ionTemperature, ionDensity, electronTemperature, electronDensity)
         return cheaseTangoProfiles

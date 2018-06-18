@@ -208,13 +208,13 @@ class ProfileFileData(object):
         Get the next data line by skipping over whitespace or comment lines.
         
         Inputs:
-          lineGenerator     generator object which generates lines of the profile file upon caling .next()
+          lineGenerator     generator object which generates lines of the profile file upon calling next()
         Outputs:
           line              data line which is not a whitespace or comment line (string)
         """
         gotDataLine = False
         while not gotDataLine:
-            line = lineGenerator.next()
+            line = next(lineGenerator)
             if not line.strip() or line.startswith('#'):  # ignore lines with only whitespace or comment lines
                 gotDataLine = False
             else:
@@ -251,7 +251,7 @@ def _line_gen_at_comment(lines, substring):
     # eat lines until line starts with # and contains substring
     gotLine = False
     while not gotLine:
-        line = lineGenerator.next()
+        line = next(lineGenerator)
         if line.startswith('#') and line[1:].strip()==substring:
             gotLine = True
     return lineGenerator
@@ -275,7 +275,7 @@ def _read_1d_array_at_comment(lines, substring):
     endOfData = False
     dataList = []
     while not endOfData:
-        line = lineGenerator.next()
+        line = next(lineGenerator)
         if not _whitespace_or_comment(line):
             dataList.append(np.fromstring(line, sep=' ')[0])
         else:
@@ -299,7 +299,7 @@ def _read_flux2D_array_at_comment(lines, fluxLabel, numTimePts, numRadialPts):
     flux = np.zeros((numTimePts, numRadialPts))
     lineGenerator = _line_gen_at_comment(lines, fluxLabel)
     for radialIndex in np.arange(numRadialPts):
-        line = lineGenerator.next()
+        line = next(lineGenerator)
         data = np.fromstring(line, sep=' ')
         flux[:, radialIndex] = data
     return flux

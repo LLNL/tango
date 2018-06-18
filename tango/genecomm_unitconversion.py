@@ -39,17 +39,22 @@ def temperature_SI_to_gene(T_SI):
     THatGene = T_SI / TrefGeneFactor
     return THatGene
 
-def radius_SI_to_libgenetango_input(psi, a):
+def radius_SI_to_libgenetango_input(x, a):
     """Convert radius in SI to the input length that libgene_tango expects for analytic circular geoemtry.
-    libgene_tango expects radius to be measured in r/a, where a is the minor radius.
+    
+    For both analytic circular geometry, or geometry from CHEASE, libgene_tango expects radius to be measured in x/a,
+    where a is the minor radius.
+    
+    For analytic circular geometry, x = physical radius r
+    For CHEASE geometry, x = normalized toroidal flux rho_tor
     
     Inputs:
-      psi               input radial coordinate psi=r (array)
+      x                 input radial coordinate x (array)
       a                 minor radius (scalar)
     Outputs:
-      normalizedRadius  r/a (array)
+      normalizedRadius  x/a (array)
     """
-    normalizedRadius = psi/a
+    normalizedRadius = x/a
     return normalizedRadius
 
 ##### Functions converting quantities from GENE's normalized units to SI #####    
