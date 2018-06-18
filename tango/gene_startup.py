@@ -72,7 +72,8 @@ def setup_gene_run_singleion_adiabaticelectrons(
     simulationTime = 10 # measured in Lref/cref
     geneFluxModel.set_simulation_time(simulationTime)
     return geneFluxModel
-    
+
+
 def setup_gene_run_singleion_kineticelectrons(
             psiTango, psiGene, minorRadius, majorRadius, B0, mass, charge, safetyFactorGeneGrid,
             Bref, Lref, Tref, nref, fromCheckpoint=True, pseudoGene=False):
@@ -114,13 +115,48 @@ def setup_gene_run_singleion_kineticelectrons(
     geneFluxModel = genecomm.GeneComm_SingleIonKineticElectrons(
             Bref=Bref, Lref=Lref, Tref=Tref, nref=nref, B0=B0, minorRadius=minorRadius, majorRadius=majorRadius, safetyFactorGeneGrid=safetyFactorGeneGrid,
             psiTangoGrid=psiTango, psiGeneGrid=psiGene, mass=mass, charge=charge, pseudoGene=pseudoGene)
-    
+
     # set the simulation time per GENE call
-    simulationTime = 50 # measured in Lref/cref
+    simulationTime = 50  # measured in Lref/cref
     geneFluxModel.set_simulation_time(simulationTime)
     return geneFluxModel
-    
-    
+
+
+def setup_gene_run_singleion_chease_adiabaticelectrons(
+    cheaseTangoData, xTango, xGene, mass, charge, densityTangoGrid,
+    Tref, nref, gridMapper, fromCheckpoint=True, pseudoGene=False):
+    """Do all the necessary setup for a tango run using GENE, in a mode with one ion species, adibatic electrons, and chease geometry.
+
+    This function works only starting from an initial condition.
+
+    Inputs:
+      cheaseTangoData       container with Chease data (instance of CheaseTangoData)
+                                From the chease data, get Bref, Lref, minor radius
+      xTango                Tango's grid for radial coordinate, with x = rho_tor (array)
+      xGene                 GENE's grid for radial coordinate, with x = rho_tor (array)
+      mass                  ion mass, measured in proton mass (scalar)
+      charge                ion charge, measured in electron charge (scalar)
+      densityTangoGrid      density profile on Tango radial grid in m^-3 (array)
+      Tref                  GENE reference temperature in kev (scalar)
+      nref                  GENE reference density in 10^19 m^-3 (scalar)
+      gridMapper            object for interfacing between Tango and GENE grids [see interfacegrids_gene.py]
+      fromCheckpoint        True if restarting GENE from a checkpoint (Boolean).  Must be True.
+      pseudoGene            False for normal GENE run, True for a pseudo call that does not run GENE but is used to test code (Boolean)
+    Outputs:
+      geneFluxModel         interface to GENE, with a get_flux method (GeneComm object)
+    """
+    # create a GENE Fluxmodel
+    geneFluxModel = genecomm.GeneComm_CheaseSingleIonAdiabaticElectrons(
+        cheaseTangoData=cheaseTangoData, Tref=Tref, nref=nref,
+        xTangoGrid=xTango, xGeneGrid=xGene, densityTangoGrid=densityTangoGrid, mass=mass, charge=charge, gridMapper=gridMapper,
+        pseudoGene=pseudoGene)
+
+    # set the simulation time per GENE call
+    simulationTime = 50  # measured in Lref/cref
+    geneFluxModel.set_simulation_time(simulationTime)
+    return geneFluxModel
+
+
 def initial_gene_run(geneFluxModel, pressureGeneGrid, simulationTime):
     """WARNING: NOT IMPLEMENTED.  Perform the initial GENE run.  
     

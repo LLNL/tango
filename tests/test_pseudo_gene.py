@@ -88,8 +88,39 @@ def test_genecomm_kinetic_electrons():
     # test the call
     fluxes = geneComm.get_flux(profiles)
     assert fluxes is not None
-    
-    
+
+def test_genecomm_chease_adiabatic_electrons():
+    """Test the class-based interface to calling pseudo-GENE with genecomm for adiabatic electrons with CHEASE geometry."""
+    (simulationTime, rho, mass, charge, temperatureHatAllSpecies, densityHatAllSpecies, safetyFactor, Lref, Bref, Tref, nref, majorRadius, minorRadius, r, rhoStar, gridMapper, checkpointSuffix) = setup_parameters()
+    densityHat = densityHatAllSpecies[0, :]
+    densityGeneGrid = densityHat * 1e19    # assume Tango and GENE use the same radial grids here.
+
+    e = 1.60217662e-19          # electron charge
+    temperatureHat = temperatureHatAllSpecies[0, :]
+    temperatureGeneGrid = temperatureHat * 1000 * e  # convert to SI
+    pseudoGene = True
+
+    cheaseTangoData = Empty()
+    cheaseTangoData.Bref = 4
+    cheaseTangoData.Lref = 3.2
+    cheaseTangoData.minorRadius = 1
+    x = r
+
+    geneComm = tango.genecomm.GeneComm_CheaseSingleIonAdiabaticElectrons(
+        cheaseTangoData=cheaseTangoData, Tref=Tref, nref=nref,
+        xTangoGrid=x, xGeneGrid=x, densityTangoGrid=densityGeneGrid, mass=1, charge=1, gridMapper=gridMapper,
+        pseudoGene=pseudoGene)
+
+    geneComm.set_simulation_time(simulationTime)
+
+    pressureGeneGrid = temperatureGeneGrid * densityGeneGrid
+    profiles = {}
+    profiles['pi'] = pressureGeneGrid
+
+    # test the call
+    fluxes = geneComm.get_flux(profiles)
+    assert fluxes is not None
+
 def test_genestartup_adiabatic_electrons():
     """Test the GENE startup script for adiabatic electrons."""
     (simulationTime, rho, mass, charge, temperatureHatAllSpecies, densityHatAllSpecies, safetyFactor, Lref, Bref, Tref, nref, majorRadius, minorRadius, r, rhoStar, gridMapper, checkpointSuffix) = setup_parameters()
@@ -102,28 +133,51 @@ def test_genestartup_adiabatic_electrons():
     e = 1.60217662e-19          # electron charge
     temperatureTangoGrid = temperatureHatAllSpecies[0, :] * 1000 * e # convert to SI
     pressureTangoGrid = temperatureTangoGrid * densityTangoGrid
-    
+
     pseudoGene = True
-    
+
     geneFluxModel = tango.gene_startup.setup_gene_run_singleion_adiabaticelectrons(
                 psiTango, psiGene, minorRadius, majorRadius, B0, ionMass, ionCharge, densityTangoGrid, pressureTangoGrid, safetyFactor,
                 Bref, Lref, Tref, nref, gridMapper, fromCheckpoint=True, pseudoGene=pseudoGene)
     
     assert hasattr(geneFluxModel, 'get_flux')
-    
+
+
 def test_genestartup_kinetic_electrons():
     """Test the GENE startup script for kinetic electrons."""
     (simulationTime, rho, mass, charge, temperatureHatAllSpecies, densityHatAllSpecies, safetyFactor, Lref, Bref, Tref, nref, majorRadius, minorRadius, r, rhoStar, gridMapper, checkpointSuffix) = setup_parameters_kinetic()
     psiTango = r
     psiGene = r
     B0 = Bref
-    
+
     pseudoGene = True
-    
+
     geneFluxModel = tango.gene_startup.setup_gene_run_singleion_kineticelectrons(
                 psiTango, psiGene, minorRadius, majorRadius, B0, mass, charge, safetyFactor,
                 Bref, Lref, Tref, nref, fromCheckpoint=True, pseudoGene=pseudoGene)
-    
+
+    assert hasattr(geneFluxModel, 'get_flux')
+
+
+def test_genestartup_chease_adiabatic_electrons():
+    """Test the GENE startup script for adiabatic electrons and CHEASE geometry."""
+    (simulationTime, rho, mass, charge, temperatureHatAllSpecies, densityHatAllSpecies, safetyFactor, Lref, Bref, Tref, nref, majorRadius, minorRadius, r, rhoStar, gridMapper, checkpointSuffix) = setup_parameters()
+    cheaseTangoData = Empty()
+    cheaseTangoData.Bref = 4
+    cheaseTangoData.Lref = 3.2
+    cheaseTangoData.minorRadius = 1
+
+    xTango = r
+    xGene = r
+    ionMass = 1
+    ionCharge = 1
+    densityTangoGrid = densityHatAllSpecies[0, :] * 1e19    # assume Tango and GENE use the same radial grids here.
+    pseudoGene = True
+
+    geneFluxModel = tango.gene_startup.setup_gene_run_singleion_chease_adiabaticelectrons(
+        cheaseTangoData, xTango, xGene, ionMass, ionCharge, densityTangoGrid,
+        Tref, nref, gridMapper, fromCheckpoint=True, pseudoGene=pseudoGene)
+
     assert hasattr(geneFluxModel, 'get_flux')
 
 def test_genecomm_with_different_grids_tango_inside():
@@ -277,3 +331,6 @@ def setup_parameters_different_grids_tango_outside():
     densityGeneGrid = 1e19 * np.ones_like(rGene)
     gridMapper = tango.interfacegrids_gene.GridInterfaceTangoOutside(rTango, rGene)
     return (simulationTime, rTango, rGene, temperatureGeneGrid, densityTangoGrid, densityGeneGrid, safetyFactorGeneGrid, Lref, Bref, majorRadius, minorRadius, rhoStar, gridMapper, checkpointSuffix)
+
+class Empty(object):
+    pass

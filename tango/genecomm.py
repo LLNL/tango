@@ -23,9 +23,9 @@ from . import genecomm_lowlevel
 from . import genecomm_unitconversion
 
 
-
 class GeneComm_SingleIonAdiabaticElectrons(object):
-    """Class-based interface for Tango to call GENE, when GENE is run with a single ion species and adiabatic electrons.
+    """Class-based interface for Tango to call GENE, when GENE is run with a single ion species and adiabatic electrons, and
+    using analytic circular magnetic geometry.
     
     Tango requires an object with a get_flux() method, which this class provides.  Except where specifically noted otherwise,
     all quantities are stored in SI units.
@@ -329,6 +329,152 @@ class GeneComm_SingleIonKineticElectrons(object):
                 pseudoGene=self.pseudoGene)
         return geneInterface
     
+
+class GeneComm_CheaseSingleIonAdiabaticElectrons:
+    """Class-based interface for Tango to call GENE, when GENE is run with a single ion species and adiabatic electrons, and
+    using magnetic geometry from a CHEASE h5 file.
+
+    Tango requires an object with a get_flux() method, which this class provides.  Except where specifically noted otherwise,
+    all quantities are stored in SI units.
+
+    With a single ion species and adiabatic electrons, the density profile does not evolve in time.  Hence, in this class, the
+    initial density profile is stored and used for every call, and the particle flux output from GENE is ignored.
+    """
+    def __init__(self, cheaseTangoData=None, Tref=None, nref=None,
+                 xTangoGrid=None, xGeneGrid=None, densityTangoGrid=None, mass=None, charge=None, gridMapper=None,
+                 pseudoGene=False):
+        """Constructor.
+
+        Inputs:
+          cheaseTangoData           container with Chease data (instance of CheaseTangoData)
+                                      From the chease data, get Bref, Lref, minor radius
+          Tref                      GENE reference temperature, measured in keV (scalar)
+          nref                      GENE reference density, measured in 10^19 m^-3 (scalar)
+          xTangoGrid                radial grid used by Tango (array)
+          xGeneGrid                 radial grid used by GENE, with coordinate x = rho_tor (array)
+          densityTangoGrid          density profile, measured in m^-3, on the Tango grid (array)
+          mass                      mass of ion species, measured in proton masses (scalar)
+          charge                    charge of ion species, measured in electron charge (scalar)
+          gridMapper                object for transforming the profiles and transport coefficients between the Tango grid and
+                                      the GENE grid.  See interfacegrids_gene.py (object)
+          pseudoGene                False for normal GENE run, True for a pseudo call that does not run GENE but is used to test code (Boolean)
+        """
+        self.numSpecies = 1
+        self.Bref = cheaseTangoData.Bref
+        self.Lref = cheaseTangoData.Lref
+        self.minorRadius = cheaseTangoData.minorRadius
+
+        self.Tref = Tref
+        self.nref = nref
+        self.mref = mass       # measured in proton masses
+
+        # when using CHEASE, GENE ignores the safety factor from the python interface.  Use junk here
+        self.safetyFactorGeneGrid = np.zeros_like(xGeneGrid)
+
+        self.xTangoGrid = xTangoGrid  # x = rho_tor when using CHEASE geometry
+        self.xGeneGrid = xGeneGrid
+        self.densityTangoGrid = np.squeeze(densityTangoGrid)  # squeeze in case it is an array with singleton dimension
+        self.ionMass = mass  # measured in (proton masses)
+        self.ionCharge = charge  # measured in electron charge
+        self.simulationTime = None  # measured in Lref/cref
+
+        self.numRadialGridPointsGENE = len(xGeneGrid)
+        assert hasattr(gridMapper, 'map_profile_onto_turb_grid') and callable(getattr(gridMapper, 'map_profile_onto_turb_grid'))
+        assert hasattr(gridMapper, 'map_transport_coeffs_onto_transport_grid') and callable(getattr(gridMapper, 'map_transport_coeffs_onto_transport_grid'))
+        self.gridMapper = gridMapper
+        self.pseudoGene = pseudoGene
+
+        self.densityGeneGrid = self.gridMapper.map_profile_onto_turb_grid(densityTangoGrid)
+
+        # place density into a 2D array, species x space
+        densityHatGeneGrid = genecomm_unitconversion.density_SI_to_gene(self.densityGeneGrid)
+        self.densityHatGeneGridAllSpecies = np.zeros((self.numSpecies, self.numRadialGridPointsGENE), dtype=np.float64)
+        self.densityHatGeneGridAllSpecies[0, :] = densityHatGeneGrid
+
+        # create the interface for calling gene
+        self.geneInterface = self._create_gene_interface()
+
+    #### Interface for Tango  ####
+    def get_flux(self, profiles):
+        """Run GENE with a given pressure profile.  Return heat flux.
+
+        According to the documentation for the Turbulence Handler, get_flux() must take as input the profile on the turbulence grid and return
+        the turbulent flux on the turbulence grid (see lodestro_method.py)
+
+        Inputs:
+          profiles      dict containing:
+                           'pi': pressure profile, measured in SI units, on the GENE radial grid (1D array)
+        Outputs:
+          fluxes        dict containing:
+                           'pi': heat flux, measured in SI units, on the GENE radial grid (1D array)
+
+        Side Effects: genecomm_lowlevel is currently set such that the same checkpoint suffix (_000) is used every run.  This means that all of
+        the GENE output files, including the checkpoint file, are overwritten each time.  GENE writes out two checkpoint files when it completes
+        a simulation: checkpoint and s_checkpoint [with the suffix, this becomes checkpoint_000 and s_checkpoint_000].  These checkpoint files
+        are contain the same information.  They each contain the perturbed distribution function f1.
+
+        When GENE starts a new simulation, it will look for the file checkpoint_000.  If that file does not exist GENE will look for
+        s_checkpoint_000.  If that does not exist, GENE looks for a checkpoint from the previous iteration.  If that doesn't exist,
+        GENE will run without a checkpoint, and start from scratch.
+        """
+        pressureGeneGrid = profiles['pi']  # ion pressure on GENE grid
+
+        # convert pressure profile into a temperature
+        temperatureGeneGrid = pressure_to_temperature(pressureGeneGrid, self.densityGeneGrid)
+
+        # convert the temperature from SI to GENE's normalized units
+        temperatureHatGeneGrid = genecomm_unitconversion.temperature_SI_to_gene(temperatureGeneGrid)
+
+        # place temperature into a 2D array, species x space
+        temperatureHatGeneGridAllSpecies = np.zeros((self.numSpecies, self.numRadialGridPointsGENE), dtype=np.float64)
+        temperatureHatGeneGridAllSpecies[0, :] = temperatureHatGeneGrid
+
+        # run GENE and get heat flux on GENE's grid
+        (dVdxHat, sqrt_gxx, avgParticleFluxHatGeneGridAllSpecies, avgHeatFluxHatGeneGridAllSpecies) = self.geneInterface.call_gene(
+            self.simulationTime, self.densityHatGeneGridAllSpecies, temperatureHatGeneGridAllSpecies)
+
+        # extract individual heat flux
+        avgHeatFluxHatGeneGrid = avgHeatFluxHatGeneGridAllSpecies[0, :]
+
+        # convert GENE's normalized heat flux into SI units
+        avgHeatFluxGeneGrid = genecomm_unitconversion.heatflux_gene_to_SI(avgHeatFluxHatGeneGrid, self.nref, self.Tref, self.mref, self.Bref, self.Lref)
+
+        fluxes = {}
+        fluxes['pi'] = avgHeatFluxGeneGrid
+        return fluxes
+
+    def set_simulation_time(self, simulationTime):
+        """Adjust how long GENE will run for when called to perform turbulence simulations.
+
+        Inputs:
+          simulationTime    GENE parameter that controls how long a simulation is run.  Measured in Lref/cref (scalar)
+        """
+        self.simulationTime = simulationTime
+    
+    def _create_gene_interface(self):
+        """Instantiate an object that provides an interface to GENE.
+
+        genecomm_lowlevel.GeneInterface expects quantities to be given in GENE normalized units.  Additionally, quantities must exist
+        on GENE's radial grid, xGene.
+
+        Outputs:
+          geneInterface     Instance of genecomm_lowlevel.GeneInterface, enables running GENE
+        """
+        # convert SI quantities to what GENE expects
+        rhoGeneInterface = genecomm_unitconversion.radius_SI_to_libgenetango_input(self.xGeneGrid, self.minorRadius)  # convert to rho = r/a
+
+        rhoStar = genecomm_unitconversion.calculate_consistent_rhostar(self.Tref, self.Bref, self.mref, self.minorRadius)
+
+        # create a few arrays that geneInterface expects
+        mass = np.array([self.ionMass])
+        charge = np.array([self.ionCharge])
+
+        geneInterface = genecomm_lowlevel.GeneInterface(
+            rho=rhoGeneInterface, mass=mass, charge=charge, safetyFactor=self.safetyFactorGeneGrid,
+            Lref=self.Lref, Bref=self.Bref, rhoStar=rhoStar, Tref=self.Tref, nref=self.nref,
+            pseudoGene=self.pseudoGene)
+        return geneInterface
+
         
 def pressure_to_temperature(pressureProfile, densityProfile):
     """Convert pressure to temperature using p=nT, or T = p/n.  Nominally, everything is expected to be in SI units.

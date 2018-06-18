@@ -153,9 +153,9 @@ def scenario2():
 def scenario3():
     """Scenario 3 for x/a, x/rhoref, T, n.  CHEASE, DIII-D-like run"""
     numRadialPts = 180
-    minorRadius = 0.741206  # a, in m
-    majorRadius = 1.68  # R0, in m
-    inverseAspectRatio = minorRadius / majorRadius
+    #minorRadius = 0.741206  # a, in m
+    #majorRadius = 1.68  # R0, in m
+    #inverseAspectRatio = minorRadius / majorRadius
     
     rhoMin = 0.1
     rhoMax = 0.9
@@ -164,6 +164,23 @@ def scenario3():
     rhoStar = 0.0034194220332098143
     xOverRhoRef = xOvera / rhoStar
     
+    # Density profile in 10^19 m^-3
+    n = scenario3_densityprofile(rho)
+    
+    # Ion temperature in keV
+    T = scenario3_temperatureprofile(rho)
+    
+    return (xOvera, xOverRhoRef, T, n)
+
+def scenario3_densityprofile(rho):
+    """Density profile, in 10^19 m^-3, for scenario 3.
+    Input: rho = x/a
+    """
+    # Machine parameters
+    minorRadius = 0.741206  # a, in m
+    majorRadius = 1.68  # R0, in m
+    inverseAspectRatio = minorRadius / majorRadius
+    
     # Density profile
     kappa_n = 2.22
     delta_n = 0.5
@@ -171,16 +188,25 @@ def scenario3():
     rho0_n = 0.5
     n0 = 3.3  # in 10^19 m^-3
     n = base_profile_shape(rho, kappa_n, delta_n, Delta_n, rho0_n, n0, inverseAspectRatio)
+    return n
+
+def scenario3_temperatureprofile(rho):
+    """Temperature profile, in keV, for scenario 3.
+    Input: rho = x/a
+    """
+    # Machine parameters
+    minorRadius = 0.741206  # a, in m
+    majorRadius = 1.68  # R0, in m
+    inverseAspectRatio = minorRadius / majorRadius
     
-    # Ion temperature
+    # Ion temperature in keV
     kappa_T = 6.96
     delta_T = 0.8
     Delta_T = 0.1
     rho0_T = 0.5
     T0 = 2.3
     T = base_profile_shape(rho, kappa_T, delta_T, Delta_T, rho0_T, T0, inverseAspectRatio)
-    
-    return (xOvera, xOverRhoRef, T, n)
+    return T
     
 def ke_scenario1():
     """Kinetic Electrons: Scenario 1 for x/a, x/rhoref, Ti, ni, Te, ne"""
