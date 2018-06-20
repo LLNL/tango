@@ -17,6 +17,7 @@ Tango python file
     GENE simulation time per iteration
     density profile
     user_control_func
+    reference values
     etc.
 
 Rule of thumb for theta parameters (which determine the diffusive/convective split) in LoDestro Method:
@@ -133,7 +134,7 @@ def problem_setup():
     # drTango = rTango[1] - rTango[0]
     L = xTango[-1]  # size of domain
 
-    Tref = 1
+    Tref = 3
     nref = 3.3
     ionMass = 2  # in proton masses
     mref = ionMass

@@ -369,7 +369,7 @@ class GeneComm_CheaseSingleIonAdiabaticElectrons:
         self.mref = mass       # measured in proton masses
 
         # when using CHEASE, GENE ignores the safety factor from the python interface.  Use junk here
-        self.safetyFactorGeneGrid = np.zeros_like(xGeneGrid)
+        self.safetyFactorGeneGrid = -1 * xGeneGrid
 
         self.xTangoGrid = xTangoGrid  # x = rho_tor when using CHEASE geometry
         self.xGeneGrid = xGeneGrid
