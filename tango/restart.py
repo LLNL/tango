@@ -52,6 +52,51 @@ def set_ewma_iterates(fields, old_profilesEWMA, old_turbFluxesEWMA):
         field.lodestroMethod.set_ewma_iterates(old_profilesEWMA[label], old_turbFluxesEWMA[label])
         # set the mminus1 variable for each field (only important if more than one timestep is used)
 
+#  **************** modified restart functions for alternate lodestro method (method 2) *****************
+# given a restart file, read in the pertinent data
+def read_metadata_from_previousfile_alt(filename):
+    """for now, assume the timestep is not changing upon a restart."""
+    with h5py.File(filename, 'r') as f:
+        # read some metadata
+        old_setNumber = f.attrs['setNumber']
+        old_last_iterationNumber = f['iterationNumber'][-1] # need to add one when starting the next one
+        old_t = f.attrs['t']
+        old_timestepNumber = f.attrs['timestepNumber']
+        # read old profile_mminus1 for each field
+        labels = get_labels_from_hdf5file(f)
+        
+        old_profiles_mminus1 = {}
+        old_profiles = {}
+        old_profilesEWMA = {}
+        old_turb_D_EWMA = {}
+        old_turb_c_EWMA = {}
+        for label in labels:
+            grp = f[label]
+            old_profiles_mminus1[label] = grp.attrs['profile_mminus1']
+            old_profiles[label] = grp['profile'][-1]
+            old_profilesEWMA[label] = grp['profileEWMATurbGrid'][-1]
+            old_turb_D_EWMA[label] = grp['DEWMATurbGrid'][-1]
+            old_turb_c_EWMA[label] = grp['cEWMATurbGrid'][-1]
+            
+    # new values for the restart
+    setNumber = old_setNumber + 1
+    startIterationNumber = old_last_iterationNumber + 1
+    t = old_t
+    timestepNumber = old_timestepNumber
+    return (setNumber, startIterationNumber, t, timestepNumber, old_profiles, old_profilesEWMA, old_turb_D_EWMA, old_turb_c_EWMA)
+
+def set_ewma_iterates_alt(fields, old_profilesEWMA, old_turb_D_EWMA, old_turb_C_EWMA):
+    """Set the EWMA iterates in the fields for a restart.
+    """
+    for field in fields:
+        label = field.label
+        # set the EWMA iterates for each field
+        field.lodestroMethod.set_ewma_iterates(old_profilesEWMA[label], old_turb_D_EWMA[label], old_turb_D_EWMA[label])
+        # set the mminus1 variable for each field (only important if more than one timestep is used)
+
+# ********* end method 2 (alternate lodestro method) stuff ********
+
+
 #initialData = tango.handlers.TangoHistoryHandler.set_up_initialdata(setNumber, xTango, xTurb, t, fields)
 
 #set_up_initialdata_on_restart(setNumber, xTango, xTurb, t, fields)
