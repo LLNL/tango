@@ -97,6 +97,8 @@ class Solver(object):
         self.tFinal = tArray[-1]
         self.m = 0                                            # Timestep index
         self.reachedEnd = False
+        self.profilesAllIterations = None
+
 
     def take_timestep(self):
         # Implicit time advance: iterate to solve the nonlinear equation!
@@ -104,7 +106,12 @@ class Solver(object):
         self.converged = False
         (self.t, self.dt) = self._get_tdt(self.tArray, self.m)
 
+        # save a few things.  Save every iteration of the residual and profiles.  Initialize here.
         self.errHistory[:] = 0
+        self.profilesAllIterations = {}
+        for field in self.fields:
+            self.profilesAllIterations[field.label] = np.zeros((self.maxIterations, self.N))
+            
         tango_logging.info("Timestep m={}:  Beginning iteration loop ...".format(self.m))
 
         # compute next iteration
@@ -122,6 +129,8 @@ class Solver(object):
                 self.reachedEnd = True
 
         self.errHistoryFinal = self.errHistory[0:self.countStoredIterations]
+        for field in self.fields:
+            self.profilesAllIterations[field.label] = self.profilesAllIterations[field.label][0:self.countStoredIterations, :]
 #
 #        # Reset if another timestep is about to come.  If not, data is preserved for access at end.
 #        if self.ok:
@@ -183,6 +192,10 @@ class Solver(object):
                 HCoeffsAllFields=HCoeffsAllFields, extradataAllFields=extradataAllFields, profiles=self.profiles, normalizedResids=normalizedResids,
                 rmsError=rmsError, iterationNumber=self.iterationNumber)
         self.datadict=datadict
+        for field in self.fields:
+            self.profilesAllIterations[field.label][index, :] = self.profiles[field.label]
+        
+        
         self.fileHandlerExecutor.execute_scheduled(datadict, self.iterationNumber)
 
         # Check for NaNs or infs or negative values
