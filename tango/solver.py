@@ -98,6 +98,16 @@ class Solver(object):
         self.m = 0                                            # Timestep index
         self.reachedEnd = False
         self.profilesAllIterations = None
+        self.fluxesAllIterations = None
+        
+        # initialize data containers for storing profiles and fluxes when using multiple timesteps
+        self.profilesAllTimesteps = {}
+        self.fluxesAllTimesteps = {}
+        for field in self.fields:
+            self.profilesAllTimesteps[field.label] = np.zeros((len(tArray), self.N))
+            self.fluxesAllTimesteps[field.label] = np.zeros((len(tArray), self.N))
+            # set the initial profile at m=0
+            self.profilesAllTimesteps[field.label][self.m, :] = self.profiles[field.label]
 
 
     def take_timestep(self):
@@ -106,11 +116,13 @@ class Solver(object):
         self.converged = False
         (self.t, self.dt) = self._get_tdt(self.tArray, self.m)
 
-        # save a few things.  Save every iteration of the residual and profiles.  Initialize here.
+        # save a few things.  Save every iteration of the residual, profiles, and fluxes.  Initialize here.
         self.errHistory[:] = 0
         self.profilesAllIterations = {}
+        self.fluxesAllIterations = {}
         for field in self.fields:
             self.profilesAllIterations[field.label] = np.zeros((self.maxIterations, self.N))
+            self.fluxesAllIterations[field.label] = np.zeros((self.maxIterations, self.N))
             
         tango_logging.info("Timestep m={}:  Beginning iteration loop ...".format(self.m))
 
@@ -128,9 +140,19 @@ class Solver(object):
                 tango_logging.info("Reached the final timestep m={} at t={}.  Simulation ending...".format(self.m, self.t))
                 self.reachedEnd = True
 
+        # truncate storage to the actual number of iterations used
         self.errHistoryFinal = self.errHistory[0:self.countStoredIterations]
         for field in self.fields:
             self.profilesAllIterations[field.label] = self.profilesAllIterations[field.label][0:self.countStoredIterations, :]
+            self.fluxesAllIterations[field.label] = self.fluxesAllIterations[field.label][0:self.countStoredIterations, :]
+            
+        # save the last iteration for the profiles and fluxes to represent the converged values at each timestep
+        for field in self.fields:
+            self.profilesAllTimesteps[field.label][self.m, :] = self.profiles[field.label]
+            self.fluxesAllTimesteps[field.label][self.m, :] = self.fluxesAllIterations[field.label][-1, :]
+            # if m=1, this is the first timestep.  Save the first iteration as the m=0 (initial condition) flux
+            if self.m == 1:
+                self.fluxesAllTimesteps[field.label][0, :] = self.fluxesAllIterations[field.label][0, :]
 #
 #        # Reset if another timestep is about to come.  If not, data is preserved for access at end.
 #        if self.ok:
@@ -198,7 +220,7 @@ class Solver(object):
         self.datadict=datadict
         for field in self.fields:
             self.profilesAllIterations[field.label][index, :] = self.profiles[field.label]
-        
+            self.fluxesAllIterations[field.label][index, :] = extradataAllFields[field.label]['fluxTurbGrid']
         
         self.fileHandlerExecutor.execute_scheduled(datadict, self.iterationNumber)
 
