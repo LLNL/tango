@@ -187,7 +187,7 @@ class TangoHistoryHandler(Handler):
     and DataSaver allows the user to specify a subset of data to save.  DataSaver also by default saves the data
     from every iteration rather than every N iterations.
     """
-    def __init__(self, iterationInterval=np.inf, basename='tangodata', maxIterations=9000, initialData=None):
+    def __init__(self, iterationInterval=np.inf, basename='tangodata', maxIterations=9000, initialData=None, keepFileOpen=False):
         """
         Inputs:
           iterationInterval     interval for executing the Handler's task (integer)
@@ -195,6 +195,9 @@ class TangoHistoryHandler(Handler):
           maxIterations         maximum number of iterations Tango will use per timestep (integer)
           initialData           initial data to save at the beginning... dict with same hierarchical structure as the hdf5 file. (dict)
                                    Must have the attribute 'setNumber', referring to which set in a given Tango run this is (int)
+          keepFileOpen          [optional] if True, the handler will keep the h5 file open, rather than closing it after every
+                                   iteration.  This is useful when an iteration is fast, because otherwise opening/closing the h5 file
+                                   would be the bottleneck.  The default procedure is better for robustness, however.
         """
         Handler.__init__(self, iterationInterval)
         
@@ -207,43 +210,61 @@ class TangoHistoryHandler(Handler):
         
         # initialize data storage
         self.countStoredIterations = 0    # how many iterations have been stored so far
+        
+        # used if a file is kept open
+        self.keepFileOpen = keepFileOpen
+        self.f = None
     
     def execute(self, data, iterationNumber):
         # open the hdf5 file and store the data
         if self.countStoredIterations == 0:
             self._create_file(self.initialData)
+            if self.keepFileOpen:
+                # open the file and save a reference to the file
+                self.f = h5py.File(self.filename, 'a', driver='core', libver='latest')
+                print('using driver core')
+                
+        # rest of execute(): bit of logic to handle whether the file should be kept open or not
+        if self.keepFileOpen:
+            self._execute_with_file_reference(data, iterationNumber, self.f)
+        else:
+            # open the file, then do stuff
+            with self._get_file() as f:
+                self._execute_with_file_reference(data, iterationNumber, f)
+                
+    def _execute_with_file_reference(self, data, iterationNumber, f):
+        if self.countStoredIterations == 0:
+            self._initialize_datasets_on_first_use(f, data)
+        # set the root data & metadata that updates each iteration
+        index = self.countStoredIterations
         
-        with self._get_file() as f:
-            if self.countStoredIterations == 0:
-                self._initialize_datasets_on_first_use(f, data)
-            # set the root data & metadata that updates each iteration
-            index = self.countStoredIterations
-            
-            # save the 0D field data that updates each iteration
-            varNames = (label for label in data if not isinstance(data[label], dict))
-            for varName in varNames:
-                dset = f[varName]
+        # save the 0D field data that updates each iteration
+        varNames = (label for label in data if not isinstance(data[label], dict))
+        for varName in varNames:
+            dset = f[varName]
+            dset.resize(index + 1, axis=0)
+            dset[index] = data[varName]
+        
+        # save the 1D field data that updates each iteration.
+        fieldlabels = (label for label in data if isinstance(data[label], dict))
+        for label in fieldlabels:
+            fielddata = data[label]
+            for varName in fielddata:  # loop through keys of the data for a given field
+                dsetName = '/'.join((label, varName))
+                dset = f[dsetName]
                 dset.resize(index + 1, axis=0)
-                dset[index] = data[varName]
-            
-            # save the 1D field data that updates each iteration.
-            fieldlabels = (label for label in data if isinstance(data[label], dict))
-            for label in fieldlabels:
-                fielddata = data[label]
-                for varName in fielddata:  # loop through keys of the data for a given field
-                    dsetName = '/'.join((label, varName))
-                    dset = f[dsetName]
-                    dset.resize(index + 1, axis=0)
-                    dset[index, :] = fielddata[varName]
-                    
-            # finish up
-            self.countStoredIterations += 1
-            f.attrs['writes'] = self.countStoredIterations
+                dset[index, :] = fielddata[varName]
+                
+        # finish up
+        self.countStoredIterations += 1
+        f.attrs['writes'] = self.countStoredIterations
+    
+    
     
         
     def _get_file(self):
         """return the opened hdf5 file.  assume file is already created."""
-        return h5py.File(self.filename, 'a')
+        return h5py.File(self.filename, 'a', libver='latest')
         
     def _create_file(self, initialData):
         """Create the hdf5, create the groups, and store some initial metadata.
@@ -252,7 +273,7 @@ class TangoHistoryHandler(Handler):
           initialdata       dict with items to save, in the same structure as to be saved in the hdf5 file (dict)
         """
         # create file
-        with h5py.File(self.filename, "w") as f:   # use mode w to overwrite and mode w- to fail if file exists
+        with h5py.File(self.filename, "w", libver='latest') as f:   # use mode w to overwrite and mode w- to fail if file exists
             # store initial metadata
             varNamesAtRoot = (varName for varName in initialData if not isinstance(initialData[varName], dict))
             for varName in varNamesAtRoot:
@@ -304,9 +325,17 @@ class TangoHistoryHandler(Handler):
             (EWMAParamTurbFlux, EWMAParamProfile) = field.lodestroMethod.get_ewma_params()
             initialData[field.label] = {
                     'EWMAParamProfile': EWMAParamProfile,
-			'EWMAParamTurbFlux': EWMAParamTurbFlux,
-			'profile_mminus1': field.profile_mminus1}
+			             'EWMAParamTurbFlux': EWMAParamTurbFlux,
+			             'profile_mminus1': field.profile_mminus1}
         return initialData
+    
+    def __del__(self):
+        if self.f is not None:  # self.f has been used to keep a reference to an open file
+            try:
+                self.f.close()
+            except:
+                pass
+        
     
 #    def reset_for_next_timestep(self):
 #        """Reset to pristine status, for use in next timestep.
