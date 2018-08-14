@@ -111,3 +111,24 @@ def test_diffusion_convection_time_polar():
     obs = mean_square_timedep_error
     exp = 0
     assert abs(obs - exp) < tol
+    
+def test_H4():
+    # test H4 in a problem with an analytic solution
+    dt = 1e9        # test only steady state
+    L = 1           # size of domain
+    N = 500         # number of spatial grid points
+    dx = L / (N-1)  # spatial grid size
+    x = np.arange(N)*dx # location corresponding to grid points j=0, ..., N-1
+    
+    UL = 2.2
+    U_initial = np.sin(np.pi * x) + UL * x
+    
+    H1 = np.ones_like(x)
+    H2 = np.ones_like(x)
+    H4 = -np.sin(x)
+    H7 = 1 - x**2
+    
+    U_final = HToMatrixFD.H_to_matrix_and_solve(dt, dx, UL, U_initial, H1=H1, H2=H2, H4=H4, H7=H7)
+    U_ss_analytic = UL - (np.cos(x) - np.cos(L)) - (x**2 - L**2) / 2 + (x**4 - L**4) / 12
+    
+    assert np.allclose(U_final, U_ss_analytic, rtol=1e-3, atol=1e-3)

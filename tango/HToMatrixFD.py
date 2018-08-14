@@ -170,10 +170,12 @@ def _H4_contribution(H4, dx):
     N = len(H4)
     ABCgContribution = np.zeros((4, N))
     # interior points
-    ABCgContribution[3, 1:-1] = -(H4[2:] + H4[:-2]) / (2 * dx)  # g_j += -(H4;j+1 - H4;j-1) / (2*dx)
+    ABCgContribution[3, 1:-1] = -(H4[2:] - H4[:-2]) / (2 * dx)  # g_j += -(H4;j+1 - H4;j-1) / (2*dx)
     
     # left boundary: no flux from the left
     ABCgContribution[3, 0] = -(H4[0] + H4[1]) / (2 * dx)        # g_0 += -(H4;0 + H4;1) / (2*dx)
+      # one could also conceivably write this at g_0 += -(H4;1 - H4;0) / (2*dx).  This is different from the previous line by the sign of H4;0.
+      # but Neumann, no-flux boundary conditions have been assumed anyway, so H4;0 should be equal to zero.  If H4;0 is not 0 there may be problems.
     
     # right boundary: no contribution (Dirichlet BC)
     return ABCgContribution

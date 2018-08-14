@@ -12,8 +12,8 @@ job output file.  In the future, the option to add files as an additional option
 
 Example.   Run setup() only once.  Then call one of debug(), info(), warning(), error(), critical()
 import tango.tango_logging as tlog
-tlog.setup(True, MPIrank, tlog.DEBUG)     # when in a parallel environment
-tlog.setup(False, 0, tlog.WARNING)        # when in a serial environment
+tlog.setup(parallel=True, rank=MPIrank, tlog.DEBUG)     # when in a parallel environment
+tlog.setup(parallel=False, rank=0, tlog.WARNING)        # when in a serial environment
 tlog.info("message goes here")
 tlog.debug("message goes here")    
 
@@ -44,7 +44,7 @@ INFO = 20
 DEBUG = 10
 
 
-def setup(parallelEnvironmentIn, MPIrankIn, level=INFO):
+def setup(parallel=False, rank=0, level=INFO):
     """Initial setup.  Run this only once.
     
     In order for logging to occur, either parallelEnvironment must be False, or a process must have an MPIrank of 0.
@@ -56,8 +56,8 @@ def setup(parallelEnvironmentIn, MPIrankIn, level=INFO):
     """
     global parallelEnvironment, MPIrank, threshold, initialized
     if initialized == False:
-        parallelEnvironment = parallelEnvironmentIn
-        MPIrank = MPIrankIn
+        parallelEnvironment = parallel
+        MPIrank = rank
         threshold = level
         initialized = True
 

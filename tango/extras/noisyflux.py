@@ -27,14 +27,17 @@ class NoisyFlux(object):
         self.amplitude = amplitude   # scalar
         self.tac = tac_x / dx        # autocorrelation time measured in discrete units (does not have to be integer)
         
-    def get_flux(self, profile):
-        flux = self.fluxModel.get_flux(profile)
-        noisyFlux = self._add_noise(flux, self.amplitude, self.tac)
-        return noisyFlux
+    def get_flux(self, profiles):
+        fluxes = self.fluxModel.get_flux(profiles)
+        noisyFluxes = self._add_noise_to_fluxes(fluxes, self.amplitude, self.tac)
+        return noisyFluxes
         
-    def GetFlux(self, profile):
-        """old function.  Did not adhere to naming guidelines but is kept for backwards compatibility."""
-        return self.get_flux(profile)
+    def _add_noise_to_fluxes(self, fluxes, amplitude, tac):
+        """Add noise to each field.  The noise added to each field is statistically independent."""
+        noisyFluxes = {}
+        for label in fluxes:
+            noisyFluxes[label] = self._add_noise(fluxes[label], amplitude, tac)
+        return noisyFluxes        
         
     @staticmethod
     def _add_noise(v, amplitude, tac):

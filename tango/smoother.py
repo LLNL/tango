@@ -13,13 +13,9 @@ class Smoother(object):
 def moving_average(x, windowSize):
     """Computes the centered moving average of x.
     
-    End points are handled in a special way.  At the end point, a centered moving average is not possible.  This occurs 
-    for (windowSize-1)/2 points on each end.  What we do here is to simply not average these end points; the output of
-    this function just uses the input data at that point.
-    
-    This is done only because it is simple and shouldn't matter due to particulars of GENE's boundary conditions.  GENE
-    uses a buffer zone at both radial ends that damp out fluctuations, so the values of the flux being handled should be
-    close to zero anyway.  A more sophisticated approach would continue to average over a few points.
+    End points are handled in a special way.  At the end points, a centered moving average with the same number of grid
+    points is not possible.  This occurs for (windowSize-1)/2 points on each end.  For these points, what we do here is
+    average these points by the number of grid points left until you hit the boundary.
     
     This function requires that windowSize be an odd integer, so that a centered moving average makes sense.
     
@@ -29,6 +25,8 @@ def moving_average(x, windowSize):
     Outputs:
       xAvg              output data (1D array)
     """
+    if windowSize == 1:  # no averaging
+        return x
     
     assert windowSize % 2 == 1, 'windowSize must be an odd integer.'
     boundarySize = int(windowSize-1) // 2
@@ -37,9 +35,16 @@ def moving_average(x, windowSize):
     cumsum = np.cumsum(np.insert(x, 0, 0))
     movingAvg = (cumsum[windowSize:] - cumsum[:-windowSize]) / windowSize
     xAvg[boundarySize:-boundarySize] = movingAvg
+    
     # end points
-    xAvg[:boundarySize] = x[:boundarySize]
-    xAvg[-boundarySize:] = x[-boundarySize:]
+    for j in np.arange(boundarySize):
+        windowSizeForBndy = 2*j + 1
+        # left side
+        xAvg[j] = np.mean(x[:windowSizeForBndy])
+        
+        # right side
+        k = j + 1  # because the last element is indexed by -1, not -0
+        xAvg[-k] = np.mean(x[-windowSizeForBndy:])
     return xAvg
     
 def add_one_if_even(n):
