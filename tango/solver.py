@@ -172,7 +172,11 @@ class Solver(object):
             fieldGroup.profileSolution = fieldGroup.solve_matrix_eqn(fieldGroup.matrixEqn)
 
         # get the profiles for the fields out of the fieldGroups, put into a dict of profiles
+        
+        # 7/4/2018  make a copy of self.profiles (a dict, so need a copy), or better, turn this into a temporary variable
         self.profiles = fieldgroups.fieldgroups_to_profiles(fieldGroups)
+
+        # 7/4/2018 Add tread_lightly iteration here
 
         # ADD INNER ITERATION LOOP HERE
         if self.useInnerIteration:
@@ -245,6 +249,28 @@ class Solver(object):
             # tolerance?
 
         return (HCoeffsAllFields, normalizedResids, rmsError)
+    
+    
+    def perform_tread_lightly_inner_iteration(self, HCoeffsTurbAllFields):
+        pass
+    
+    def is_acceptable(old_profiles, new_profiles):
+        """Return True if new_profiles is not unacceptably "far away" from old_profiles.  Otherwise, return False.
+        
+        Here, "far away" is measured by comparing each individual profile.  If any point in the new profile has increased
+        or decreases by more than 50% compared to the old profile, that is considered too far.  However, the profile is
+        only checked in the inner 60% of the domain.  The region near the outer boundary is not checked, partially
+        because the initial profile might not be consistent with boundary conditions and applying the boundary condition
+        might force a 50% change.
+        """
+        # loop through profiles
+        
+        # for a profile
+        # get only the inner 60% of the domain
+        # calculation the pointwise change of each point
+        # check if any is greater than maxChange
+        pass
+    
     
     @property
     def ok(self):
