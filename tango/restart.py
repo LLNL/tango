@@ -14,7 +14,8 @@ import h5py
 import shutil
 
 # given a restart file, read in the pertinent data
-def read_metadata_from_previousfile(filename):
+# The following 2 functions were demoted to the 'old method' as of 8/13/2018
+def read_metadata_from_previousfile_old(filename):
     """for now, assume the timestep is not changing upon a restart."""
     with h5py.File(filename, 'r') as f:
         # read some metadata
@@ -43,7 +44,7 @@ def read_metadata_from_previousfile(filename):
     timestepNumber = old_timestepNumber
     return (setNumber, startIterationNumber, t, timestepNumber, old_profiles, old_profilesEWMA, old_turbFluxesEWMA)
 
-def set_ewma_iterates(fields, old_profilesEWMA, old_turbFluxesEWMA):
+def set_ewma_iterates_old(fields, old_profilesEWMA, old_turbFluxesEWMA):
     """Set the EWMA iterates in the fields for a restart.
     """
     for field in fields:
@@ -53,8 +54,9 @@ def set_ewma_iterates(fields, old_profilesEWMA, old_turbFluxesEWMA):
         # set the mminus1 variable for each field (only important if more than one timestep is used)
 
 #  **************** modified restart functions for alternate lodestro method (method 2) *****************
+#  Promoted to main method as of 8/13/2018
 # given a restart file, read in the pertinent data
-def read_metadata_from_previousfile_alt(filename):
+def read_metadata_from_previousfile(filename):
     """for now, assume the timestep is not changing upon a restart."""
     with h5py.File(filename, 'r') as f:
         # read some metadata
@@ -85,13 +87,13 @@ def read_metadata_from_previousfile_alt(filename):
     timestepNumber = old_timestepNumber
     return (setNumber, startIterationNumber, t, timestepNumber, old_profiles, old_profilesEWMA, old_turb_D_EWMA, old_turb_c_EWMA)
 
-def set_ewma_iterates_alt(fields, old_profilesEWMA, old_turb_D_EWMA, old_turb_C_EWMA):
+def set_ewma_iterates(fields, old_profilesEWMA, old_turb_D_EWMA, old_turb_c_EWMA):
     """Set the EWMA iterates in the fields for a restart.
     """
     for field in fields:
         label = field.label
         # set the EWMA iterates for each field
-        field.lodestroMethod.set_ewma_iterates(old_profilesEWMA[label], old_turb_D_EWMA[label], old_turb_D_EWMA[label])
+        field.lodestroMethod.set_ewma_iterates(old_profilesEWMA[label], old_turb_D_EWMA[label], old_turb_c_EWMA[label])
         # set the mminus1 variable for each field (only important if more than one timestep is used)
 
 # ********* end method 2 (alternate lodestro method) stuff ********

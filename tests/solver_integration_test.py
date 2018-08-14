@@ -5,6 +5,7 @@ import numpy as np
 import os
 import h5py
 import scipy
+import scipy.integrate
 
 from tango.extras import shestakov_nonlinear_diffusion
 import tango
@@ -201,7 +202,7 @@ def test_inner_iteration_loop():
 def test_solver_not_converging():
     # test that data is stored even when solution does not converge within MaxIterations
     (L, N, dx, x, nL, n, maxIterations, tol, fields, compute_all_H_all_fields, tArray) = problem_setup()
-    maxIterations = 100  # takes 170 iterations to converge for these parameters
+    maxIterations = 60  # takes 85 iterations to converge for these parameters
     
     # set up filehandler
     setNumber = 0

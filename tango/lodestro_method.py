@@ -27,7 +27,7 @@ from . import derivatives
 from . import multifield
 
 
-class TurbulenceHandler(object):
+class TurbulenceHandler_old(object):
     """    
     This class acts as a high-level interface to effect the LoDestro Method.
 
@@ -40,6 +40,8 @@ class TurbulenceHandler(object):
     
     Since the class provides the H coefficients, and not simply diffusion coefficients, it must
     be aware of the coordinate geometric factor V' = dV/dpsi.
+    
+    As of 8/13/2018, this has been demoted into the old version.
     """
     def __init__(self, dxTurbGrid, xTango, fluxModel, VprimeTango=None, fluxSmoother=None):
         """A geometric factor Vprime may be optionally provided to the constructor.  This 
@@ -162,11 +164,13 @@ class TurbulenceHandler(object):
         return (H2contrib, H3contrib)
         
         
-class lm(object):
+class lm_old(object):
     """High level class for the LoDestro method: Handle two separate things:
         1) The exponentially weighted moving average (EWMA) of both the turbulent flux and the profiles
         2) Transform (averaged) turbulent fluxes into effective transport coefficients
     These two functions are handled with two separate classes    
+    
+    As of 8/13/2018, this has been demoted into the old version.
     """
     def __init__(self, EWMAParamTurbFlux, EWMAParamProfile, thetaParams):
         # create instances for handling EWMAs
@@ -256,9 +260,10 @@ class lm(object):
         self._EWMATurbFlux.set_ewma_iterate(turbFluxEWMA)
     
 ### ************************************************************** ###
-# Alternate versions of TurbulenceHandler, lm
+#   ** as of 8/13/2018, these have been promoted to the main version
+# Alternate versions of TurbulenceHandler, lm 
 #   These alternate versions apply EWMA on the transport coefficients, not on the fluxes
-class TurbulenceHandler_alt(object):
+class TurbulenceHandler(object):
     """    
     This class acts as a high-level interface to effect the LoDestro Method.
 
@@ -394,7 +399,7 @@ class TurbulenceHandler_alt(object):
         return (H2contrib, H3contrib)
         
         
-class lm_alt(object):
+class lm(object):
     """High level class for the LoDestro method: Handle two separate things:
         1) The exponentially weighted moving average (EWMA) of both the turbulent flux and the profiles
         2) Transform (averaged) turbulent fluxes into effective transport coefficients
@@ -487,7 +492,8 @@ class lm_alt(object):
         
         Inputs:
           profileEWMA   New EWMA iterate for the profile (array)
-          turbFluxEWMA  New EWMA iterate for the turbulent flux (array)
+          turbDEWMA     New EWMA iterate for the turbulent diffusive coefficient (array)
+          turbcEWMA     New EWMA iterate for the turbulent convective coefficient (array)
         """
         self.set_ewma_profile(profileEWMA)
         self.set_ewma_turb_D(turbDEWMA)

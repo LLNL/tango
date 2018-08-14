@@ -10,14 +10,14 @@ import tango
 #from tango import handlers, restart
 
 def test_restart():
-    # first run, should abort at iterationNumber 100 (101 writes)
+    # first run, should abort at iterationNumber 70 (71 writes)
     (L, N, dx, x, nL, n, maxIterations, tol, fields, compute_all_H_all_fields, tArray) = problem_setup()
     
     # set up the handler
     (setNumber, xTango, xTurb, t) = (0, x, x, tArray[1])
     initialData = tango.handlers.TangoHistoryHandler.set_up_initialdata(setNumber, xTango, xTurb, t, fields)
     
-    solver = tango.solver.Solver(L, x, tArray, maxIterations, tol, compute_all_H_all_fields, fields, maxIterationsPerSet=101)
+    solver = tango.solver.Solver(L, x, tArray, maxIterations, tol, compute_all_H_all_fields, fields, maxIterationsPerSet=71)
     basename = 'tangodata'
     filename0 = basename + '_s0.hdf5'
     tangoHistoryHandler = tango.handlers.TangoHistoryHandler(iterationInterval=1, basename=basename, maxIterations=maxIterations, initialData=initialData)
@@ -27,9 +27,9 @@ def test_restart():
         # Implicit time advance: iterate to solve the nonlinear equation!
         solver.take_timestep()
 
-    # check the filename0, last iteration number is 100
+    # check the filename0, last iteration number is 70
     with h5py.File(filename0, 'r') as f:
-        assert f['iterationNumber'][-1] == 100
+        assert f['iterationNumber'][-1] == 70
         
     # ******************************* Begin Restart ******************************
     # set up fields as normal to fill in the EWMA params, labels, profiles_mminus1, etc.
@@ -39,8 +39,8 @@ def test_restart():
     # xTango, xTurb, basename set above
     
     if restartfile:
-        (setNumber, startIterationNumber, t, timestepNumber, old_profiles, old_profilesEWMA, old_turbFluxesEWMA) = tango.restart.read_metadata_from_previousfile(restartfile)
-        tango.restart.set_ewma_iterates(fields, old_profilesEWMA, old_turbFluxesEWMA)
+        (setNumber, startIterationNumber, t, timestepNumber, old_profiles, old_profilesEWMA, old_turb_D_EWMA, old_turb_c_EWMA) = tango.restart.read_metadata_from_previousfile(restartfile)
+        tango.restart.set_ewma_iterates(fields, old_profilesEWMA, old_turb_D_EWMA, old_turb_c_EWMA)
         initialData = tango.handlers.TangoHistoryHandler.set_up_initialdata(setNumber, xTango, xTurb, t, fields)
     else: # shouldn't be run here, but this is the strategy to use in general code
         (setNumber, startIterationNumber, t, timestepNumber) = (0, 0, tArray[1], 1)
@@ -61,8 +61,8 @@ def test_restart():
     
     # check
     with h5py.File(filename1, 'r') as f:
-        assert f['iterationNumber'][0] == 101
-        assert f['iterationNumber'][-1] == 170
+        assert f['iterationNumber'][0] == 71
+        assert f['iterationNumber'][-1] == 84
     
     # teardown
     os.remove(filename0)
@@ -71,14 +71,14 @@ def test_restart():
     
     
 def test_combine_savefiles():
-    # first run, should abort at iterationNumber 100 (101 writes)
+    # first run, should abort at iterationNumber 70 (71 writes)
     (L, N, dx, x, nL, n, maxIterations, tol, fields, compute_all_H_all_fields, tArray) = problem_setup()
     
     # set up the handler
     (setNumber, xTango, xTurb, t) = (0, x, x, tArray[1])
     initialData = tango.handlers.TangoHistoryHandler.set_up_initialdata(setNumber, xTango, xTurb, t, fields)
     
-    solver = tango.solver.Solver(L, x, tArray, maxIterations, tol, compute_all_H_all_fields, fields, maxIterationsPerSet=101)
+    solver = tango.solver.Solver(L, x, tArray, maxIterations, tol, compute_all_H_all_fields, fields, maxIterationsPerSet=71)
     basename = 'tangodata'
     filename0 = basename + '_s0.hdf5'
     tangoHistoryHandler = tango.handlers.TangoHistoryHandler(iterationInterval=1, basename=basename, maxIterations=maxIterations, initialData=initialData)
@@ -88,9 +88,9 @@ def test_combine_savefiles():
         # Implicit time advance: iterate to solve the nonlinear equation!
         solver.take_timestep()
 
-    # check the filename0, last iteration number is 100
+    # check the filename0, last iteration number is 70
     with h5py.File(filename0, 'r') as f:
-        assert f['iterationNumber'][-1] == 100
+        assert f['iterationNumber'][-1] == 70
         
     # ******************************* Begin First Restart ******************************
     # second run, should at abort at iteration number 110 (10 writes)
@@ -101,8 +101,8 @@ def test_combine_savefiles():
     # xTango, xTurb, basename set above
     
     if restartfile:
-        (setNumber, startIterationNumber, t, timestepNumber, old_profiles, old_profilesEWMA, old_turbFluxesEWMA) = tango.restart.read_metadata_from_previousfile(restartfile)
-        tango.restart.set_ewma_iterates(fields, old_profilesEWMA, old_turbFluxesEWMA)
+        (setNumber, startIterationNumber, t, timestepNumber, old_profiles, old_profilesEWMA, old_turb_D_EWMA, old_turb_c_EWMA) = tango.restart.read_metadata_from_previousfile(restartfile)
+        tango.restart.set_ewma_iterates(fields, old_profilesEWMA, old_turb_D_EWMA, old_turb_c_EWMA)
         initialData = tango.handlers.TangoHistoryHandler.set_up_initialdata(setNumber, xTango, xTurb, t, fields)
     
     # instantiate the handler
@@ -124,8 +124,8 @@ def test_combine_savefiles():
     restartfile = 'tangodata_s1.hdf5'  # use this to short circuit errors possibly resulting from the above...
     # xTango, xTurb, basename set above
     if restartfile:
-        (setNumber, startIterationNumber, t, timestepNumber, old_profiles, old_profilesEWMA, old_turbFluxesEWMA) = tango.restart.read_metadata_from_previousfile(restartfile)
-        tango.restart.set_ewma_iterates(fields, old_profilesEWMA, old_turbFluxesEWMA)
+        (setNumber, startIterationNumber, t, timestepNumber, old_profiles, old_profilesEWMA, old_turb_D_EWMA, old_turb_c_EWMA) = tango.restart.read_metadata_from_previousfile(restartfile)
+        tango.restart.set_ewma_iterates(fields, old_profilesEWMA, old_turb_D_EWMA, old_turb_c_EWMA)
         initialData = tango.handlers.TangoHistoryHandler.set_up_initialdata(setNumber, xTango, xTurb, t, fields)
     
     # instantiate the handler
@@ -147,11 +147,11 @@ def test_combine_savefiles():
         
     # check
     with h5py.File(filename0, 'r') as f0, h5py.File(filename1, 'r') as f1, h5py.File(filename2, 'r') as f2, h5py.File(filename, 'r') as f:
-        assert f0['iterationNumber'][-1] == 100
-        assert f1['iterationNumber'][0] == 101
-        assert f1['iterationNumber'][-1] == 110
-        assert f2['iterationNumber'][0] == 111
-        assert np.allclose(f['n/profile'][111:, :], f2['n/profile'][:, :], rtol=0, atol=1e-15)
+        assert f0['iterationNumber'][-1] == 70
+        assert f1['iterationNumber'][0] == 71
+        assert f1['iterationNumber'][-1] == 80
+        assert f2['iterationNumber'][0] == 81
+        assert np.allclose(f['n/profile'][81:, :], f2['n/profile'][:, :], rtol=0, atol=1e-15)
         
     # teardown
     os.remove(filename0)
