@@ -32,6 +32,7 @@ from .utilities import util
 class Solver(object):
     def __init__(self, L, x, tArray, maxIterations, tol, compute_all_H_all_fields, fields,
                  startIterationNumber=0, profiles=None, maxIterationsPerSet=np.inf,
+                 useTreadLightly=False, treadLightlyParams=None,
                  useInnerIteration=False, innerIterationMaxCount=20,
                  user_control_func=None):
         """Constructor
@@ -53,8 +54,11 @@ class Solver(object):
           startIteration            [optional] Used for restarting   Set the starting iteration number, default 0 (int)
           profiles                  [optional] Used for restarting.  Set the initial profiles, default to field.profile_mminus1 (dict of arrays, accessed by label)
           maxIterationsPerSet       [optional] Used for shutting down gracefully for restarts.  Set the number of iterations that can be performed on this set. (int)
+          useTreadLightly           [optional] If True, perform a `tread lightly' check which prevents the change of any profile from being to large in a single
+                                        iteration by using a smaller pseudo-timestep.  Only use for finding a steady state  (boolean)
+          treadLightlyParams        [optional] Parameters for tread_lightly (dict)
           useInnerIteration         [optional] If True, perform an inner iteration loop [need to specify loop parameters somewhere...] where the turbulent
-                                       coefficients are held fixed but other nonlinear terms can be converged. (boolean)
+                                        coefficients are held fixed but other nonlinear terms can be converged. (boolean)
           innerIterationMaxCount    [optional, default=20] Maximum number of iterations to use on the inner iteration loop (int)
           user_control_func         [optional] user-supplied function for customizing control (function).  Runs once per iteration, at the end.
                                         The function must take one argument, and that is the Solver object.
@@ -69,6 +73,8 @@ class Solver(object):
         self.tol = tol
         self.compute_all_H_all_fields = compute_all_H_all_fields
         self.fields = fields
+        self.useTreadLightly = useTreadLightly
+        self.treadLightlyParams = treadLightlyParams if treadLightlyParams is not None else {}
         self.useInnerIteration = useInnerIteration
         self.innerIterationMaxCount = innerIterationMaxCount
         if user_control_func is not None:
@@ -108,6 +114,9 @@ class Solver(object):
             self.fluxesAllTimesteps[field.label] = np.zeros((len(tArray), self.N))
             # set the initial profile at m=0
             self.profilesAllTimesteps[field.label][self.m, :] = self.profiles[field.label]
+        
+        # default determiner for unacceptably large step of a profile in an iteration
+        self.is_unacceptable_one_profile = is_unacceptable_one_profile
 
 
     def take_timestep(self):
@@ -174,6 +183,12 @@ class Solver(object):
 
         index = self.countStoredIterations
 
+        # before we start, make a copy of the profiles dict if needed (for tread_lightly)
+        if self.useTreadLightly:
+            # prepare: set the "mminus1" slot to the old iteration, as needed for our scheme
+            for field in self.fields:
+                field.profile_mminus1 = self.profiles[field.label]
+
         # iterate through all the fields, compute all the H's [runs the turbulence calculation]
         (HCoeffsAllFields, HCoeffsTurbAllFields, extradataAllFields) = self.compute_all_H_all_fields(self.t, self.x, self.profiles)
 
@@ -194,13 +209,14 @@ class Solver(object):
             fieldGroup.profileSolution = fieldGroup.solve_matrix_eqn(fieldGroup.matrixEqn)
 
         # get the profiles for the fields out of the fieldGroups, put into a dict of profiles
-        
-        # 7/4/2018  make a copy of self.profiles (a dict, so need a copy), or better, turn this into a temporary variable
         self.profiles = fieldgroups.fieldgroups_to_profiles(fieldGroups)
 
-        # 7/4/2018 Add tread_lightly iteration here
+        
+        if self.useTreadLightly:
+            # tread_lightly to adjust profiles if the step is too large.  Only for finding steady state.
+            self.tread_lightly(HCoeffsTurbAllFields)
 
-        # ADD INNER ITERATION LOOP HERE
+        # Inner iteration loop (typically for converging cheaper nonlinear functions while keeping turbulent diffusion coefficients fixed)
         if self.useInnerIteration:
             # self.profiles is set internally
             (HCoeffsAllFields, ignore, ignore) = self.perform_inner_iteration(HCoeffsTurbAllFields)
@@ -273,26 +289,92 @@ class Solver(object):
         return (HCoeffsAllFields, normalizedResids, rmsError)
     
     
-    def perform_tread_lightly_inner_iteration(self, HCoeffsTurbAllFields):
-        pass
-    
-    def is_acceptable(old_profiles, new_profiles):
-        """Return True if new_profiles is not unacceptably "far away" from old_profiles.  Otherwise, return False.
-        
-        Here, "far away" is measured by comparing each individual profile.  If any point in the new profile has increased
-        or decreases by more than 50% compared to the old profile, that is considered too far.  However, the profile is
-        only checked in the inner 60% of the domain.  The region near the outer boundary is not checked, partially
-        because the initial profile might not be consistent with boundary conditions and applying the boundary condition
-        might force a 50% change.
+    def tread_lightly(self, HCoeffsTurbAllFields):
         """
-        # loop through profiles
+        The tread_lightly step reduces the psuedo-timestep dtau until a step is acceptable.
         
-        # for a profile
-        # get only the inner 60% of the domain
-        # calculation the pointwise change of each point
-        # check if any is greater than maxChange
-        pass
-    
+        Uses as soft inputs,
+            field.profile_mminus1       in self.fields, as the previous iteration (l-1)
+            self.profiles               value after a full dt iteration; unknown on input whether acceptable
+        
+        Inputs:
+            HCoeffsTurbAllFiels
+            
+        Outputs:
+            none
+            
+        Soft Outputs
+            self.profiles               Either same as on input (acceptable step), or changed from value on input
+                                        (from an unacceptable to an acceptable step)
+        """
+        # create a profilesPrevIteration dict, stored in the mminus1 slot
+        profilesPrevIteration = {}
+        for field in self.fields:
+            profilesPrevIteration[field.label] = field.profile_mminus1
+        
+        # compare just-obtained profile, and profile from previous iteration
+        stepUnacceptable = self.is_unacceptable(profilesPrevIteration, self.profiles)
+        if not stepUnacceptable:
+            return
+        
+        # unacceptable step: get ready for tread_lightly
+        # define a function that returns a trial 'profiles' for input dtau
+        def get_profiles(dtau):
+            # iterate through all the fields, compute all the H's (using previously computed turbulent diffusion coefficients)
+            (HCoeffsAllFields, _, _) = self.compute_all_H_all_fields(self.t, self.x, profilesPrevIteration, computeTurbulence=False, HCoeffsTurbAllFields=HCoeffsTurbAllFields)
+            
+            # create fieldGroups from fields as prelude to the iteration step
+            fieldGroups = fieldgroups.fields_to_fieldgroups(self.fields, HCoeffsAllFields)
+            
+            # discretize and compute matrix system [iterating over groups]
+            for fieldGroup in fieldGroups:
+                fieldGroup.matrixEqn = fieldGroup.Hcoeffs_to_matrix_eqn(dtau, self.dx, fieldGroup.rightBC, fieldGroup.psi_mminus1, fieldGroup.HCoeffs)
+                
+            # compute new iterate of profiles [iterating over groups]
+            for fieldGroup in fieldGroups:
+                fieldGroup.profileSolution = fieldGroup.solve_matrix_eqn(fieldGroup.matrixEqn)
+            
+            # get the profiles for the fields out of the fieldGroups, put into a dict of profiles
+            trialProfiles = fieldgroups.fieldgroups_to_profiles(fieldGroups)
+            return trialProfiles
+        
+        
+        # Loop: continually reduce dtau until we can make a step with an acceptable profile
+        dtau = self.dt
+        timeFactor = 2
+        while stepUnacceptable:
+            dtau /= timeFactor
+            trialProfiles = get_profiles(dtau)   
+            stepUnacceptable = self.is_unacceptable(profilesPrevIteration, trialProfiles)
+
+        # End of first loop: trialProfiles gives the profiles dtau past time t 
+        tango_logging.info(f'used tread lightly on iteration {self.iterationNumber}.  dtau={dtau}')
+        self.profiles = trialProfiles
+        return
+        
+
+    def is_unacceptable(self, oldProfiles, newProfiles):
+        """Return True if newProfiles is unacceptably "far away" from oldProfiles.  Otherwise, return False.
+        
+        Here, "far away" is measured by comparing each individual profile. See is_unacceptable_one_profile for details.        
+        
+        Inputs:
+            oldProfiles        dict of arrays, accessed by label (dict)
+            newProfiles        dict of arrays, accessed by label (dict)
+            
+        Outputs:
+            unacceptable        True if any new profile is unacceptably far away (bool)  
+        """
+        defaultMaxFractionalChange = 0.2 # if no value provided
+        maxFractionalChange = self.treadLightlyParams.get('maxFractionalChange', defaultMaxFractionalChange)
+        
+        # loop through profiles
+        for field in self.fields:
+            label = field.label
+            unacceptable = self.is_unacceptable_one_profile(oldProfiles[label], newProfiles[label], maxFractionalChange=maxFractionalChange)
+            if unacceptable:
+                return True
+        return False
     
     @property
     def ok(self):
@@ -451,3 +533,38 @@ class Solver(object):
         z = x.copy()
         z.update(y)
         return z
+#### End class solver    
+
+#### Helper functions
+def is_unacceptable_one_profile(oldProfile, newProfile, maxFractionalChange=0.2):
+    """Return True if new_profile is unacceptably "far away" from old_profile.  Otherwise, return False.
+    
+    If any point in the new profile has increased or decreases by more than x% compared to the old profile, that 
+    is considered too far.  However, the profile is only checked in the inner 50% of the domain.  The region near
+    the outer boundary is not checked, partially because the initial profile might not be consistent with boundary
+    conditions and applying the boundary condition might force a x% change.
+    
+    Can always be monkey patched.
+    
+    Inputs:
+        old_profile             profile to compare to (1d array)
+        new_profile             profile to compare with old profile (1d array)
+        maxFractionalChange     [optional, default=0.2] maximum acceptable fractional change (scalar)
+        
+    Outputs:
+        unacceptable            True if new profile is too far away from old profile (bool)
+    """
+    unacceptable = False
+    N = len(oldProfile)
+    fraction = 0.5
+    # get only the inner 50% of the domain
+    oldProfileInner = oldProfile[0:int(fraction * N)]
+    newProfileInner = newProfile[0:int(fraction * N)]
+    
+    # calculation the pointwise change of each point
+    fractionalChange = (newProfileInner - oldProfileInner) / oldProfileInner
+    
+    # check if any is greater than maxFractionalChange
+    if np.any(np.abs(fractionalChange) >= maxFractionalChange):
+        unacceptable = True    
+    return unacceptable

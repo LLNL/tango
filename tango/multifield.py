@@ -178,7 +178,7 @@ class ComputeAllHAllFields(object):
           x                         independent coordinate grid (array)
           profiles                  container of profiles, accessed by label (dict)
           computeTurbulence         If True, use the fluxModel to compute new turbulent fluxes.  If False, use the input HCoeffsTurbAllFields. (boolean)
-          HCoeffsTurbAllFields      used if computeTurbulence==True.  container of HCoeffs for the turbulent contribution, accessed by label (dict)
+          HCoeffsTurbAllFields      used if computeTurbulence==False.  container of HCoeffs for the turbulent contribution, accessed by label (dict)
         
         Outputs:
           HCoeffsAllFields          container of HCoeffs, accessed by label (dict)
