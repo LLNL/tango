@@ -236,7 +236,8 @@ class Solver(object):
         self.datadict=datadict
         for field in self.fields:
             self.profilesAllIterations[field.label][index, :] = self.profiles[field.label]
-            self.fluxesAllIterations[field.label][index, :] = extradataAllFields[field.label]['fluxTurbGrid']
+            if extradataAllFields is not None:
+                self.fluxesAllIterations[field.label][index, :] = extradataAllFields[field.label]['fluxTurbGrid']
         
         self.fileHandlerExecutor.execute_scheduled(datadict, self.iterationNumber)
 

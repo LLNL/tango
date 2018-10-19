@@ -177,6 +177,44 @@ ______ /   .
     chi[indRegion3] = chiMax
     pass  
 
+def calc_nuE(electronDensity, electronTemperature, ionMass=2, ionCharge=1):
+    """Return the ion-electron collisional energy exchange frequency [assuming ni=ne].
+    
+    Valid for array input density, electronTemperature (but must be of same size)
+    
+    Inputs:
+        electronDensity         electron density in m^-3 (array)
+        electronTemperature     electron temperature in SI units (array)
+        ionMass                 ion mass, measured in proton masses  (scalar)
+        ionCharge               ion charge number Z (scalar)
+    Outputs:
+        nuE_ie                  collisional energy exchange frequency in s^-1 (array)
+    """
+    e = 1.60217662e-19      # electron charge
+    logLambda = 10          # make an assumption for coulomb logarithm, for simplicity
+    n = electronDensity
+    Z = ionCharge
+    Te_eV = electronTemperature / e          # convert to eV
+    # From NRL formulary, p34
+    nuE_ie = 3.2e-15 * n * Z**2 * logLambda / (ionMass * Te_eV**(3/2))
+    return nuE_ie
+
+    """given n and Te in SI units, calculate nu0 in SI units.
+    
+    nu0 is the collisional energy exchange frequency.
+    
+    Valid for array input n, Te"""
+    
+    # from nrl formulary
+    ionMass = 2 # measured in proton masses
+    logLambda = 10
+    ionCharge = 1
+    electronDensity = n
+    
+    
+    
+    return nuE_ie
+
 
 #def collisional_energy_exchange(ionMass, ionCharge, electronTemperature, ionDensity):
 #    """Contribution to linear equation for new iteration from the collisional energy exchange term in the ion pressure equation.
@@ -200,7 +238,7 @@ ______ /   .
 #    Te_ineV = electronTemperature / e      # convert from J to eV
 #    
 #    # Reference: NRL formulary.  Gives result in s^-1
-#    nuE_ie = 3.2e-15 * electronDensity * ionCharge**2 * logLambda / (ionMass * Te_ineV)
+#    nuE_ie = 3.2e-15 * electronDensity * ionCharge**2 * logLambda / (ionMass * Te_ineV**1.5)
 #        
 #    # Contributions to finite difference arrays
 #    B_contrib = nuE_ie
