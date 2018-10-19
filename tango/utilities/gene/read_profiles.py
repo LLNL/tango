@@ -21,13 +21,23 @@ from __future__ import division, absolute_import
 from collections import namedtuple
 import numpy as np
 
-ProfileData = namedtuple('ProfileData', 'rho T n omt omn')
+ProfileData = namedtuple('ProfileData', 'rho T n')
+ProfileDataOmt = namedtuple('ProfileDataOmt', 'rho T n omt omn')
 
 def read_profiles(filename):
     """Read in GENE's profile data.
     
     rho = x/a.  Typically, for EFIT/CHEASE geometry, GENE uses x = rhotor
     """
+    (rho, xOverRhoRef, T, n) = np.loadtxt(filename, unpack=True)
+    profile = ProfileData(rho, T, n)
+    return profile
+
+def read_profiles_omt(filename):
+    """Read in GENE's profile data, including normalized gradients omt, omn.
+    
+    rho = x/a.  Typically, for EFIT/CHEASE geometry, GENE uses x = rhotor
+    """
     (rho, xOverRhoRef, T, n, omt, omn) = np.loadtxt(filename, unpack=True)
-    profile = ProfileData(rho, T, n, omt, omn)
+    profile = ProfileDataOmt(rho, T, n, omt, omn)
     return profile

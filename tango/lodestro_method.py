@@ -523,7 +523,7 @@ class FluxSplit(object):
     def __init__(self, thetaParams):
         """Class constructor
         Inputs:
-          thetaParams              dict containing parameters to be used in the ftheta function.
+          thetaParams              dict containing parameters to be used in the ftheta function (dict)
           
         If a custom ftheta is passed in (a callable that is the value of thetaParams['custom_ftheta']), then it must have the signature
         custom_ftheta(Dhat, dpdx, thetaParams) to match default_ftheta.  If this needs to be adjusted, then the signature of default_ftheta

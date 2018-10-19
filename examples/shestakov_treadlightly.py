@@ -82,7 +82,7 @@ compute_all_H_all_fields = tango.multifield.ComputeAllHAllFields(fields, turbHan
 
 tArray = np.array([0, 1e4])  # specify the timesteps to be used.
 
-treadLightlyParams = {'maxFractionalChange': 0.5}
+treadLightlyParams = {'maxFractionalChange': 0.2}
 solver = tango.solver.Solver(L, x, tArray, maxIterations, tol, compute_all_H_all_fields, fields,
                              useTreadLightly=True, treadLightlyParams=treadLightlyParams)
 

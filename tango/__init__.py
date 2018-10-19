@@ -8,6 +8,9 @@ from . import physics
 from . import physics_to_H
 from . import interfacegrids_gene
 from . import restart
+from . import genecomm_unitconversion
+from . import smoother
+from . import derivatives
 
 #from . import analysis
 #from . import gene_startup
