@@ -33,8 +33,10 @@ class Solver(object):
     def __init__(self, L, x, tArray, maxIterations, tol, compute_all_H_all_fields, fields,
                  startIterationNumber=0, profiles=None, maxIterationsPerSet=np.inf,
                  useTreadLightly=False, treadLightlyParams=None,
+                 useTreadInitially=False, treadInitiallyParams=None,
                  useInnerIteration=False, innerIterationMaxCount=20,
-                 user_control_func=None):
+                 user_control_func=None,
+                 saveFluxesInMemory=False):
         """Constructor
 
         Inputs:
@@ -57,6 +59,10 @@ class Solver(object):
           useTreadLightly           [optional] If True, perform a `tread lightly' check which prevents the change of any profile from being to large in a single
                                         iteration by using a smaller pseudo-timestep.  Only use for finding a steady state  (boolean)
           treadLightlyParams        [optional] Parameters for tread_lightly (dict)
+          useTreadInitially         [optional] If True, take a certain number of pseudo-timesteps where the turbulent flux is treated explicitly (boolean)
+          treadInitiallyParams      [optional] Parameters for tread_initially (dict)
+                                                numInitialSteps (integer)
+                                                dtau (scalar)
           useInnerIteration         [optional] If True, perform an inner iteration loop [need to specify loop parameters somewhere...] where the turbulent
                                         coefficients are held fixed but other nonlinear terms can be converged. (boolean)
           innerIterationMaxCount    [optional, default=20] Maximum number of iterations to use on the inner iteration loop (int)
@@ -75,8 +81,12 @@ class Solver(object):
         self.fields = fields
         self.useTreadLightly = useTreadLightly
         self.treadLightlyParams = treadLightlyParams if treadLightlyParams is not None else {}
+        self.useTreadInitially = useTreadInitially
+        self.treadInitiallyParams = treadInitiallyParams if treadInitiallyParams is not None else {}
         self.useInnerIteration = useInnerIteration
         self.innerIterationMaxCount = innerIterationMaxCount
+        self.saveFluxesInMemory = saveFluxesInMemory
+        
         if user_control_func is not None:
             assert callable(user_control_func), "user_control_func must be callable (e.g., a function)"
         self.user_control_func = user_control_func
@@ -183,8 +193,8 @@ class Solver(object):
 
         index = self.countStoredIterations
 
-        # before we start, make a copy of the profiles dict if needed (for tread_lightly)
-        if self.useTreadLightly:
+        # before we start, make a copy of the profiles dict if needed
+        if self.useTreadLightly or self.useTreadInitially:
             # prepare: set the "mminus1" slot to the old iteration, as needed for our scheme
             for field in self.fields:
                 field.profile_mminus1 = self.profiles[field.label]
@@ -196,8 +206,15 @@ class Solver(object):
         fieldGroups = fieldgroups.fields_to_fieldgroups(self.fields, HCoeffsAllFields)
 
         # discretize and compute matrix system [iterating over groups]
+        dtau = self.dt
+        if self.useTreadInitially:
+            if self.iterationNumber < self.treadInitiallyParams['numInitialSteps']:
+                dtau = self.treadInitiallyParams['dtau']
+            else:
+                dtau = self.dt                
+                
         for fieldGroup in fieldGroups:
-            fieldGroup.matrixEqn = fieldGroup.Hcoeffs_to_matrix_eqn(self.dt, self.dx, fieldGroup.rightBC, fieldGroup.psi_mminus1, fieldGroup.HCoeffs)
+            fieldGroup.matrixEqn = fieldGroup.Hcoeffs_to_matrix_eqn(dtau, self.dx, fieldGroup.rightBC, fieldGroup.psi_mminus1, fieldGroup.HCoeffs)
 
         # check convergence
         (self.converged, rmsError, normalizedResids) = self.check_convergence(fieldGroups, self.profiles, self.tol)
@@ -210,7 +227,6 @@ class Solver(object):
 
         # get the profiles for the fields out of the fieldGroups, put into a dict of profiles
         self.profiles = fieldgroups.fieldgroups_to_profiles(fieldGroups)
-
         
         if self.useTreadLightly:
             # tread_lightly to adjust profiles if the step is too large.  Only for finding steady state.
@@ -236,8 +252,9 @@ class Solver(object):
         self.datadict=datadict
         for field in self.fields:
             self.profilesAllIterations[field.label][index, :] = self.profiles[field.label]
-            if extradataAllFields is not None:
-                self.fluxesAllIterations[field.label][index, :] = extradataAllFields[field.label]['fluxTurbGrid']
+            if self.saveFluxesInMemory:
+                if extradataAllFields is not None:
+                    self.fluxesAllIterations[field.label][index, :] = extradataAllFields[field.label]['fluxTurbGrid']
         
         self.fileHandlerExecutor.execute_scheduled(datadict, self.iterationNumber)
 
@@ -288,8 +305,7 @@ class Solver(object):
             # tolerance?
 
         return (HCoeffsAllFields, normalizedResids, rmsError)
-    
-    
+
     def tread_lightly(self, HCoeffsTurbAllFields):
         """
         The tread_lightly step reduces the psuedo-timestep dtau until a step is acceptable.
@@ -299,7 +315,7 @@ class Solver(object):
             self.profiles               value after a full dt iteration; unknown on input whether acceptable
         
         Inputs:
-            HCoeffsTurbAllFiels
+            HCoeffsTurbAllFields
             
         Outputs:
             none
@@ -308,7 +324,7 @@ class Solver(object):
             self.profiles               Either same as on input (acceptable step), or changed from value on input
                                         (from an unacceptable to an acceptable step)
         """
-        # create a profilesPrevIteration dict, stored in the mminus1 slot
+        # create a profilesPrevIteration dict, taken from the mminus1 slot
         profilesPrevIteration = {}
         for field in self.fields:
             profilesPrevIteration[field.label] = field.profile_mminus1
