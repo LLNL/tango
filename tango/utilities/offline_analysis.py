@@ -27,7 +27,8 @@ class analysis:
     def __init__(self, xTango, xTurb, profiles, fluxes, 
                  minorRadius, majorRadius, n_BC, Ti_keV_BC, Te_keV_BC,
                  Tref, mref, Bref, nref,
-                 n_D_adhoc, pi_D_adhoc, pe_D_adhoc):
+                 n_D_adhoc, pi_D_adhoc, pe_D_adhoc,
+                 rExtrapZoneLeft=0.4158, rExtrapZoneRight=0.4455):
         self.xTango = xTango
         self.xTurb = xTurb
         self.dxTango = xTango[1] - xTango[0]
@@ -69,9 +70,9 @@ class analysis:
         self.pe_BC = Te_keV_BC * 1000 * e * n_BC
         
         # Set up a grid mapper
-        rExtrapZoneLeft = 0.70 * minorRadius
-        rExtrapZoneRight = 0.75 * minorRadius
-        polynomialDegree = 1
+        #rExtrapZoneLeft = 0.70 * minorRadius
+        #rExtrapZoneRight = 0.75 * minorRadius
+        polynomialDegree = 0
         self.gridMapper = tango.interfacegrids_gene.TangoOutsideExtrapCoeffs(
                 xTango, xTurb, rExtrapZoneLeft, rExtrapZoneRight, polynomialDegree)
         
@@ -247,7 +248,7 @@ class analysis:
         if turboption == 1:
             HCoeffs_Turb = self.Hcoeff_turbflux_ftheta(profileTurb, fluxTurb, DHatTurb, cHatTurb)
         elif turboption == 2:
-            HCoeffs_Turb = self.HCoeff_turbflux_H4()
+            HCoeffs_Turb = self.Hcoeff_turbflux_H4(profileTurb, fluxTurb)
         return HCoeffs_Turb
     
 #    def ftheta(self, Dhat, cHat, profile):
@@ -279,9 +280,12 @@ class analysis:
         HCoeffsTurb = tango.multifield.HCoefficients(H2=H2contrib, H3=H3contrib)
         return HCoeffsTurb
     
-    def Hcoeff_turbflux_H4(self):
+    def Hcoeff_turbflux_H4(self, profileTurb, fluxTurb):
         """represent turbulent flux with H4 only. (i.e., explicit)"""
-        pass
+        flux = self.gridMapper.map_to_transport_grid(fluxTurb)
+        H4contrib = -self.VprimeTango * flux
+        HCoeffsTurb = tango.multifield.HCoefficients(H4=H4contrib)
+        return HCoeffsTurb
     
     def Hcoeff_turbflux_combo(self):
         """represent turbulent flux with some combination of H2, H3 H4"""
