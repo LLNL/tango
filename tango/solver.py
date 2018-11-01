@@ -68,6 +68,7 @@ class Solver(object):
           innerIterationMaxCount    [optional, default=20] Maximum number of iterations to use on the inner iteration loop (int)
           user_control_func         [optional] user-supplied function for customizing control (function).  Runs once per iteration, at the end.
                                         The function must take one argument, and that is the Solver object.
+          saveFluxesInMemory        [optional] if True, save fluxes from each iteration into memory.
         """
         self.L = L
         self.x = x
@@ -205,14 +206,15 @@ class Solver(object):
         # create fieldGroups from fields as prelude to the iteration step
         fieldGroups = fieldgroups.fields_to_fieldgroups(self.fields, HCoeffsAllFields)
 
-        # discretize and compute matrix system [iterating over groups]
+        # set timestep, with optional changes from treadInitially
         dtau = self.dt
         if self.useTreadInitially:
             if self.iterationNumber < self.treadInitiallyParams['numInitialSteps']:
                 dtau = self.treadInitiallyParams['dtau']
             else:
                 dtau = self.dt                
-                
+           
+        # discretize and compute matrix system [iterating over groups]
         for fieldGroup in fieldGroups:
             fieldGroup.matrixEqn = fieldGroup.Hcoeffs_to_matrix_eqn(dtau, self.dx, fieldGroup.rightBC, fieldGroup.psi_mminus1, fieldGroup.HCoeffs)
 
