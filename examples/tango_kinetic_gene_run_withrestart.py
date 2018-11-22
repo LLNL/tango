@@ -326,12 +326,12 @@ basename = 'tangodata'
 restartfile = tango.restart.check_if_should_restart(basename)   # returns path of restartfile as string; returns None if no restartfile found
 
 if restartfile: # Restart file exists
-    (setNumber, startIterationNumber, t, timestepNumber, old_profiles, old_profilesEWMA, old_turbFluxesEWMA) = tango.restart.read_metadata_from_previousfile(restartfile)
+    (setNumber, startIterationNumber, t, timestepNumber, old_profiles, old_profilesEWMA, old_turb_D_EWMA, old_turb_c_EWMA) = tango.restart.read_metadata_from_previousfile(restartfile)
     # if the density was artificially controlled in the last run, then the density saved to Tango will be incorrected.
     # Fix that here if necessary.  Otherwise keep line commented.
     # old_profiles['n'] = densityICTango
     
-    tango.restart.set_ewma_iterates(fields, old_profilesEWMA, old_turbFluxesEWMA)
+    tango.restart.set_ewma_iterates(fields, old_profilesEWMA, old_turb_D_EWMA, old_turb_c_EWMA)
     initialData = tango.handlers.TangoHistoryHandler.set_up_initialdata(setNumber, rTango, rGene, t, fields)
 else: # No restartfile exists.  Set up for first Tango run
     tlog.info('Error.  Should not be here.  Stopping')
