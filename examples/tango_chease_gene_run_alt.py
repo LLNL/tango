@@ -127,6 +127,8 @@ def problem_setup():
     Bref = cheaseTangoData.Bref
     VprimeTango = cheaseTangoData.dVdx
     gxxAvgTango = cheaseTangoData.gxxAvg  # average <g^xx> = <grad x dot grad x>
+    gradxAvgTango = cheaseTangoData.gradxAvg
+
 
     xGene = rhoGene * minorRadius
     dxGene = xGene[1] - xGene[0]
@@ -148,6 +150,10 @@ def problem_setup():
     xExtrapZoneRight = 0.80 * minorRadius
     polynomialDegree = 1
     gridMapper = tango.interfacegrids_gene.TangoOutsideExtrapCoeffs(xTango, xGene, xExtrapZoneLeft, xExtrapZoneRight, polynomialDegree)
+
+    # map <|grad x|^2> and <|grad x|> to turbulence grid
+    gxxAvgTurb = gridMapper.map_profile_onto_turb_grid(gxxAvgTango)
+    gradxAvgTurb = gridMapper.map_profile_onto_turb_grid(gradxAvgTango)
 
     # specify a boundary condition for pressure at the outward radial boundary
     temperatureRightBCInkeV = 1
@@ -181,10 +187,12 @@ def problem_setup():
     tArray = np.array([0, 1e4])  # specify the timesteps to be used.
 
     # creation of turbulence handler
-    turbHandler = tango.lodestro_method.TurbulenceHandler_alt(dxGene, xTango, geneFluxModel, VprimeTango=VprimeTango, fluxSmoother=fluxSmoother)
+    turbHandler = tango.lodestro_method.TurbulenceHandler(dxGene, xTango, geneFluxModel, VprimeTango=VprimeTango, fluxSmoother=fluxSmoother,
+                                                          gxxAvgTango=gxxAvgTango, gradxAvgTango=gradxAvgTango)
 
     compute_all_H_pressure = ComputeAllH(VprimeTango, gxxAvgTango, minorRadius)
-    lodestroMethod = tango.lodestro_method.lm_alt(lmParams['EWMAParamTurbFlux'], lmParams['EWMAParamProfile'], lmParams['thetaParams'])
+    lodestroMethod = tango.lodestro_method.lm(lmParams['EWMAParamTurbFlux'], lmParams['EWMAParamProfile'], lmParams['thetaParams'],
+                                              gxxAvgTurb=gxxAvgTurb, gradxAvgTurb=gradxAvgTurb)
 
     # seed the EWMA D,c for the turbulent heat flux
     heatFluxSeed = helper.read_seed_turb_flux('heat_flux_seed')

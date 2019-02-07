@@ -277,7 +277,8 @@ class TurbulenceHandler(object):
     Since the class provides the H coefficients, and not simply diffusion coefficients, it must
     be aware of the coordinate geometric factor V' = dV/dpsi.
     """
-    def __init__(self, dxTurbGrid, xTango, fluxModel, VprimeTango=None, fluxSmoother=None):
+    def __init__(self, dxTurbGrid, xTango, fluxModel, VprimeTango=None, fluxSmoother=None,
+                 gxxAvgTango=1, gradxAvgTango=1):
         """A geometric factor Vprime may be optionally provided to the constructor.  This 
             geometric factor is essentially a Jacobian and appears in transport equations
             in non-Cartesian geometry.  It typically appears in the form
@@ -296,6 +297,10 @@ class TurbulenceHandler(object):
               VprimeTango (optional)    geometric coefficients dV/dpsi depending on coordinate system, on the transport grid (array)
                                             default: None [V'=1 everywhere]
               fluxSmoother (optional)   object with a smooth() method to spatially smooth the turbulent flux. 
+              gxxAvgTango (optional)    geometric coefficient <g^xx> = <|grad x|^2>, on the transport grid (array).
+                                            default: gxx=1 
+              gradxAvgTango (optional)  geometric coefficient <|grad x|> on the transport grid (array)
+                                            default: <|grad x|>=1
         """
         self.dxTurbGrid = dxTurbGrid
         self.xTango = xTango        
@@ -314,6 +319,10 @@ class TurbulenceHandler(object):
             self.doSmoothing = True
         else:
             self.doSmoothing = False
+            
+        self.gxxAvgTango = gxxAvgTango
+        self.gradxAvgTango = gradxAvgTango
+        
             
     def turbflux_to_Hcoeffs_multifield(self, fields, profiles):
         """Compute the turbulent fluxes and transform to effective transport (H) coefficients.
@@ -382,15 +391,15 @@ class TurbulenceHandler(object):
         """Transform the effective diffusion coefficient D and effective convective velocity c
         into the contributions to the H coefficients for the iteration-update solver for the
         transport equation.  The form of the transport equation for ion pressure is 
-                3/2 V' dp/dt - d/dpsi[ V' D dp/dpsi - V'c p] + ...
-        Hence, H2 = V'*D  and  H3 = -V'*c.
+                3/2 V' dp/dt - d/dpsi[ V' D <|grad x|^2> dp/dpsi - V'c <|grad x|> p] + ...
+        Hence, H2 = V' * D * <|grad x|^2>  and  H3 = -V' * c * <|grad x|>.
         """
         #  Could change this to use the physics_to_H module
         #     H2contrib = physics_to_H.GeometrizedDiffusionCoeffToH(D, Vprime)
         #     H3contrib = physics_to_H.GeometrizedConvectionCoeffToH(c, Vprime):
         if self.isNonCartesian == True:
-            H2contrib = self.VprimeTango * D
-            H3contrib = -self.VprimeTango * c
+            H2contrib = self.VprimeTango * D * self.gxxAvgTango
+            H3contrib = -self.VprimeTango * c * self.gradxAvgTango
         elif self.isNonCartesian == False:
             H2contrib = D
             H3contrib = -c
@@ -405,14 +414,22 @@ class lm(object):
         2) Transform (averaged) turbulent fluxes into effective transport coefficients
     These two functions are handled with two separate classes    
     """
-    def __init__(self, EWMAParamTurbFlux, EWMAParamProfile, thetaParams):
+    def __init__(self, EWMAParamTurbFlux, EWMAParamProfile, thetaParams, gxxAvgTurb=1, gradxAvgTurb=1):
+        """
+        Inputs:
+            EWMAParamTurbFlux           relaxation parameter for dealing with turbulent flux (scalar)
+            EWMAParamProfile            relaxation parameter for dealing with profile (scalar)
+            thetaParams                 parameters related to flux splitting (dict)
+            gxxAvgTurb (optional)       (default=1) <|grad x|^2> on the turbulence grid (array)
+            gradxAvgTurb (optional)     (default=1) <|grad x|> on the turbulence grid (array)
+        """
         # create instances for handling EWMAs
         self._EWMATurbD = EWMA(EWMAParamTurbFlux)
         self._EWMATurbc = EWMA(EWMAParamTurbFlux)
         self._EWMAProfile = EWMA(EWMAParamProfile)
         
         # Create instance of FluxSplit
-        self._fluxSplitter = FluxSplit(thetaParams) 
+        self._fluxSplitter = FluxSplit(thetaParams, gxxAvgTurb, gradxAvgTurb) 
     
     # Provide an interface to the EWMA and fluxSplitter methods
     def ewma_turb_D(self, D_l):
@@ -520,17 +537,22 @@ class FluxSplit(object):
     profiles is assumed to be applied externally.  This, for a given profile p, determines D and c such that
         Gamma = -D*dp/dx + c*p
     """
-    def __init__(self, thetaParams):
+    def __init__(self, thetaParams, gxxAvg=1, gradxAvg=1):
         """Class constructor
         Inputs:
-          thetaParams              dict containing parameters to be used in the ftheta function (dict)
+            thetaParams             dict containing parameters to be used in the ftheta function (dict)
+            gxxAvg (optional)       (default=1) <|grad x|^2> on the turbulence grid (1d array)
+            gradxAvg (optional)     (defualt=1) <|grad x|> on the turbulence grid (1d array)
           
         If a custom ftheta is passed in (a callable that is the value of thetaParams['custom_ftheta']), then it must have the signature
         custom_ftheta(Dhat, dpdx, thetaParams) to match default_ftheta.  If this needs to be adjusted, then the signature of default_ftheta
         will have to be changed as well.
         """
-        # define/initialize internal varibales
+        # define/initialize internal variables
         self.thetaParams = thetaParams
+        
+        self.gxxAvg = gxxAvg
+        self.gradxAvg = gradxAvg
         
         # if a custom ftheta has been passed in, set the internal ftheta to use that; otherwise use the default.
         if 'custom_ftheta' in thetaParams and callable(thetaParams['custom_ftheta']):
@@ -566,8 +588,8 @@ class FluxSplit(object):
         This function first calculates DHat and cHat, which are the diffusion and convective coefficients that would result if the
           turbulent flux were represented as purely diffusive (DHat) or purely convective (cHat).  That is,
           
-            DHat = -Flux / (dp/dx),
-            cHat = Flux / p
+            DHat = -Flux / [<|grad x|^2> * (dp/dx)],
+            cHat = Flux / [<|grad x|> * p]
         
         Then, a coefficient theta is computed that determines the split between diffusive and convective contributions.
         
@@ -579,33 +601,30 @@ class FluxSplit(object):
         The coefficient theta may vary throughout space.  There is a lot of freedom in how theta is chosen; various schemes may work.
         
           *************************
-        Note that in general, a *vector* flux will have geometric coefficients appear (in particular, |grad psi|^2).  But we need not
-          worry about these geometric coefficients.  For example, consider diffusive effects.  A vector flux Q results in the quantity
-          of interest 
+        Note that in general, a *vector* flux will have geometric coefficients appear (in particular, |grad x| and |grad x|^2).  For example, 
+        consider diffusive and convective effects.  A vector flux Q results in the quantity of interest 
             
             qturb = Q dot grad psi.
         
-        A Fick's Law diffusive assumption would involve writing, for some D2,
+        A Fick's Law diffusive assumption would involve writing, for some D and vector c,
         
-            Q = -D2 * grad p = -D2 * (dp/dpsi) * grad psi,
+            Q = -D * grad p  +  c *(grad x) / |grad x| * p = -D * (dp/dx) * grad x  + c * grad x / |grad x| * p,
         
         which leads to
         
-            qturb = Q dot grad psi = -D2 |grad psi|^2 dp/dpsi.
+            qturb = Q dot grad x = -D |grad x|^2 dp/dx  + c |grad x| p
             
-        Defining D = D2 |grad psi|^2, this leads to
-        
-            qturb = -D dp/dpsi.
+        A flux surface average here acts on the |grad x| and |grad x|^2 terms only.
             
-        Assume the input here is the number qturb, which is the radial flux (already dotted with grad psi).  qturb is what will be returned
-          by a turbulence code; the vector flux Q will not be returned.  Hence, we do not have to worry about the geometric coefficient
-          |grad psi|^2.  It is absorbed into the effective diffusive coefficient D returned by this function.  Note the dimensions of D
-          are different than the dimensions of D2 if |grad psi|^2 is not dimensionless.       
+        Assume the input here is the number qturb, which is the radial flux (already dotted with grad x).  qturb is what will be returned
+          by a turbulence code; the vector flux Q will not be returned.  While it is possible to work with a coefficient D2 = D |grad x|^2,
+          and similarly for c2, this is not desirable.  This D2, c2 will be coordinate dependent.  By using D and c as defined, they will be
+          coordinate independent and expressible in m^2/s and m/s.
         """
         dpdx = derivatives.dx_centered_difference_edge_first_order(p, dx)
-        DHat = -flux / dpdx
+        DHat = -flux / (self.gxxAvg * dpdx)
         DHat[dpdx==0] = 0     # get rid of infinities resulting from divide by zero
-        cHat = flux / p
+        cHat = flux / (self.gradxAvg * p)
         
         theta = self.ftheta(DHat, dpdx, self.thetaParams)
         # uncomment the following line to turn off convective terms and use only diffusive terms
