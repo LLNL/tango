@@ -32,13 +32,14 @@ import scipy.interpolate
 
 class CheaseTangoData(object):
     """Output container to store the data read from a CHEASE file, then interpolated, and passed to Tango."""
-    def __init__(self, psi, x, dVdx, safetyFactor, dpsidx, gxxAvg, Bref, Lref, minorRadius):
+    def __init__(self, psi, x, dVdx, safetyFactor, dpsidx, gxxAvg, gradxAvg, Bref, Lref, minorRadius):
         self.psi = psi
         self.x = x
         self.dVdx = dVdx
         self.safetyFactor = safetyFactor
         self.dpsidx = dpsidx
         self.gxxAvg = gxxAvg
+        self.gradxAvg = gradxAvg
         self.Bref = Bref
         self.Lref = Lref
         self.minorRadius = minorRadius
@@ -249,7 +250,34 @@ def compute_avg_gxx_cheasegrid(f):
     dpsidx[0] = dpsidx[1]  # remove what could be a divide by zero error
     dxdpsi = 1 / dpsidx
     gxxAvg = dxdpsi**2 * g11Avg
-    return gxxAvg    
+    return gxxAvg
+
+def compute_avg_gradx_cheasegrid(f):
+    """Compute the flux surface average of sqrt(g^xx) = |grad x| on the CHEASE grid, where x = rho_tor.
+    
+    CHEASE provides g^11 = grad psi dot grad psi.  Here, we compute <sqrt(g^11)> = <|grad psi|>, then performs
+    a change of coordinates to <|grad x|>.  This is justified because grad x = grad psi * dx/dpsi, and thus
+    
+            <|grad x|> = <|grad psi|> * dx/dpsi
+    
+    Inputs:
+        f       An open hdf5 chease file
+    
+    Outputs:
+        gradxAvg    <|grad x|> on the CHEASE grid (1D array, size npsi)
+    """
+    chi = get_chi(f)
+    jacobian = get_jacobian(f)
+    g11 = get_g11(f)        # |grad psi|^2
+    gradpsi = np.sqrt(g11)  # |grad psi|
+    gradpsiAvg = flux_surface_average(chi, jacobian, gradpsi)    # <|grad psi|>
+    
+    # convert <|grad psi|> to <|grad x|> through a change of coordinates
+    dpsidx = get_dpsidrhotor(f)
+    dpsidx[0] = dpsidx[1]   # remove what could be a divide by zero error
+    dxdpsi = 1 / dpsidx
+    gradxAvg = dxdpsi * gradpsiAvg      # <|grad x|>
+    return gradxAvg
     
 #################################################################################################################
 # ---------------- Functions for collecting CHEASE data and interpolating to the Tango grid ------------------- #
@@ -369,12 +397,27 @@ def interpolate_gxxAvg(f, xTango):
       xTango        Tango rho_tor grid (1D array)
     
     Outputs:
-      gxxAvgTango   dV/dx interpolated onto the Tango grid (1D array)
+      gxxAvgTango   <|grad x|^2> interpolated onto the Tango grid (1D array)
     """
     xChease = get_rhotor(f)
     gxxAvgChease = compute_avg_gxx_cheasegrid(f)
     gxxAvgTango = interpolate_1d_qty(xChease, xTango, gxxAvgChease)
-    return gxxAvgTango    
+    return gxxAvgTango
+
+def interpolate_gradxAvg(f, xTango):
+    """Compute <|grad x|> on Chease grid, then interpolate onto the Tango grid.
+    
+    Inputs:
+        f               An open hdf5 chease file
+        xTango          Tango rho_tor grid (1D array)
+        
+    Outputs:
+        gradxAvgTango   <|grad x|> interpolated onto the Tango grid (1D array)
+    """
+    xChease = get_rhotor(f)
+    gradxAvgChease = compute_avg_gradx_cheasegrid(f)
+    gradxAvgTango = interpolate_1d_qty(xChease, xTango, gradxAvgChease)
+    return gradxAvgTango
     
 def gather_1d_interpolations(f, xTango):
     """Gather 1D interpolations to get the quantities needed by Tango onto the Tango grid.
@@ -398,7 +441,8 @@ def gather_1d_interpolations(f, xTango):
     safetyFactorTango = interpolate_safety_factor(f, xTango)
     dpsidxTango = interpolate_dpsidx(f, xTango)
     gxxAvgTango = interpolate_gxxAvg(f, xTango)
-    return (psiTango, dVdxTango, safetyFactorTango, dpsidxTango, gxxAvgTango)    
+    gradxAvgTango = interpolate_gradxAvg(f, xTango)
+    return (psiTango, dVdxTango, safetyFactorTango, dpsidxTango, gxxAvgTango, gradxAvgTango)
     
 def interpolate_profiles(f, xTango):
     """Collect the temperature and density profiles from the CHEASE file and interpolate to Tango grid.
@@ -449,11 +493,11 @@ def get_chease_data_on_Tango_grid(filename, rhoTango):
     with h5py.File(filename, 'r') as f:
         (Bref, majorRadius, minorRadius) = get_reference_vals(f)
         xTango = minorRadius * rhoTango
-        (psi, dVdx, safetyFactor, dpsidx, gxxAvg) = gather_1d_interpolations(f, xTango)
+        (psi, dVdx, safetyFactor, dpsidx, gxxAvg, gradxAvg) = gather_1d_interpolations(f, xTango)
 
     # in GENE, when using CHEASE, Lref is always set to the major radius from the CHEASE file.  We follow this here.
     Lref = majorRadius
-    cheaseTangoData = CheaseTangoData(psi, xTango, dVdx, safetyFactor, dpsidx, gxxAvg, Bref, Lref, minorRadius)
+    cheaseTangoData = CheaseTangoData(psi, xTango, dVdx, safetyFactor, dpsidx, gxxAvg, gradxAvg, Bref, Lref, minorRadius)
     return cheaseTangoData
 
 
