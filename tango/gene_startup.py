@@ -157,6 +157,39 @@ def setup_gene_run_singleion_chease_adiabaticelectrons(
     return geneFluxModel
 
 
+def setup_gene_run_singleion_chease_kineticelectrons(
+        cheaseTangoData, xTango, xGene, mass, charge, Tref, nref,
+        fromCheckpoint=True, pseudoGene=False):
+    """Do all the necessary setup for a tango run using GENE, in a mode with one ion species, adibatic electrons, and chease geometry.
+
+    This function works only starting from an initial condition.
+
+    Inputs:
+      cheaseTangoData       container with Chease data (instance of CheaseTangoData)
+                                From the chease data, get Bref, Lref, minor radius
+      xTango                Tango's grid for radial coordinate, with x = rho_tor (array)
+      xGene                 GENE's grid for radial coordinate, with x = rho_tor (array)
+      mass                  species masses, in proton masses (1D array, by species)
+      charge                species charges, in elementary charges (1D array, by species)
+      Tref                  GENE reference temperature in kev (scalar)
+      nref                  GENE reference density in 10^19 m^-3 (scalar)
+      fromCheckpoint        True if restarting GENE from a checkpoint (Boolean).  Must be True.
+      pseudoGene            False for normal GENE run, True for a pseudo call that does not run GENE but is used to test code (Boolean)
+    Outputs:
+      geneFluxModel         interface to GENE, with a get_flux method (GeneComm object)
+    """
+    # create a GENE Fluxmodel
+    geneFluxModel = genecomm.GeneComm_CheaseSingleIonKineticElectrons(
+        cheaseTangoData=cheaseTangoData, Tref=Tref, nref=nref,
+        xTangoGrid=xTango, xGeneGrid=xGene, mass=mass, charge=charge,
+        pseudoGene=pseudoGene)
+
+    # set the simulation time per GENE call
+    simulationTime = 50  # measured in Lref/cref
+    geneFluxModel.set_simulation_time(simulationTime)
+    return geneFluxModel
+
+
 def initial_gene_run(geneFluxModel, pressureGeneGrid, simulationTime):
     """WARNING: NOT IMPLEMENTED.  Perform the initial GENE run.  
     
