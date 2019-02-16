@@ -123,7 +123,7 @@ subroutine gene_tango (n_transp_it_in, electrostatic, rank, simtimelim_in, & !ad
   tango_par_in_dir = ''
   print_ini_msg = .false.
 
-  x0 = 0.5 ! --- need to look for a better solution (tbg)
+  !x0 = 0.5  ! commented out by JP, 2/15/2019.  This isn't good when x0 != 0.5 is desired.  Can it simply be commented out?
   call read_parameters('')
   if (magn_geometry.eq.'tracer') then
      file_unit = -1
@@ -172,7 +172,7 @@ Contains
     x_local = .false.
     nx0=px0_in
 
-    x0 = 0.5
+    !x0 = 0.5   ! commented out by JP, 2/15/2019.  This isn't good when x0 != 0.5 is desired.  Can it simply be commented out?
     allocate(in_profiles(1:px0_in,0:n_spec-1,0:4))
     mag_prof = .true.
     if (init_cond.eq.'ppj') init_cond='db'
@@ -185,6 +185,12 @@ Contains
 
     !basic species settings
     mref = -1.
+	
+	! get mref from first ion species [in case an ion is not the first species]
+	do n=0, n_spec-1
+       if (spec(n)%charge .ge. 0. .and. mref .lt. 0) mref = mass_in(n)
+    enddo
+	
     do n=0, n_spec-1
        spec(n)%dens = 1.0
        spec(n)%temp = 1.0
@@ -195,7 +201,6 @@ Contains
        in_profiles(:,n,1) = temp_io(:,n)
        in_profiles(:,n,3) = dens_io(:,n)
        spec(n)%charge = charge_in(n)
-       if (spec(n)%charge .ge. 0. .and. mref .lt. 0) mref = mass_in(n)
        spec(n)%mass = mass_in(n) / mref
     enddo
 
