@@ -487,6 +487,10 @@ class GeneComm_CheaseSingleIonKineticElectrons:
     With a kinetic ions and kinetic electrons, the density profile can evolve in time.  Hence, in this class, there is no
     initial density profile that is stored.  Rather, the density profile is provided on every call to GENE.  Furthermore, the
     particle flux is returned, not ignored as in the case with adiabatic electrons.
+    
+    **** CAUTION.  Unlike the previous GeneComm for kinetic electrons, due to an implementation detail, this class
+    assumes that ELECTRONS are the FIRST species, and ions are the second.  This is something that comes from the order
+    of how species are specified in the GENE parameters file.
     """
     def __init__(self, cheaseTangoData=None, Tref=None, nref=None,
                  xTangoGrid=None, xGeneGrid=None, mass=None, charge=None,
@@ -576,22 +580,22 @@ class GeneComm_CheaseSingleIonKineticElectrons:
         # place density into a 2D array, species x space... 
         # density represents ION density, so electron density = ion charge * ion density
         densityHatGeneGridAllSpecies = np.zeros((self.numSpecies, self.numRadialGridPointsGENE), dtype=np.float64)
-        densityHatGeneGridAllSpecies[0, :] = densityHatGeneGrid         # ion density
-        densityHatGeneGridAllSpecies[1, :] = self.charge[0] * densityHatGeneGrid # electron density
+        densityHatGeneGridAllSpecies[1, :] = densityHatGeneGrid         # ion density
+        densityHatGeneGridAllSpecies[0, :] = self.charge[0] * densityHatGeneGrid # electron density
 
         # place temperature into a 2D array, species x space
         temperatureHatGeneGridAllSpecies = np.zeros((self.numSpecies, self.numRadialGridPointsGENE), dtype=np.float64)
-        temperatureHatGeneGridAllSpecies[0, :] = ionTemperatureHatGeneGrid
-        temperatureHatGeneGridAllSpecies[1, :] = electronTemperatureHatGeneGrid
+        temperatureHatGeneGridAllSpecies[1, :] = ionTemperatureHatGeneGrid
+        temperatureHatGeneGridAllSpecies[0, :] = electronTemperatureHatGeneGrid
 
         # run GENE and get heat flux on GENE's grid
         (dVdxHat, sqrt_gxx, avgParticleFluxHatGeneGridAllSpecies, avgHeatFluxHatGeneGridAllSpecies) = self.geneInterface.call_gene(
                     self.simulationTime, densityHatGeneGridAllSpecies, temperatureHatGeneGridAllSpecies)
 
         # extract individual particle and heat flux
-        avgIonParticleFluxHatGeneGrid = avgParticleFluxHatGeneGridAllSpecies[0, :]
-        avgIonHeatFluxHatGeneGrid = avgHeatFluxHatGeneGridAllSpecies[0, :]
-        avgElectronHeatFluxHatGeneGrid = avgHeatFluxHatGeneGridAllSpecies[1, :]
+        avgIonParticleFluxHatGeneGrid = avgParticleFluxHatGeneGridAllSpecies[1, :]
+        avgIonHeatFluxHatGeneGrid = avgHeatFluxHatGeneGridAllSpecies[1, :]
+        avgElectronHeatFluxHatGeneGrid = avgHeatFluxHatGeneGridAllSpecies[0, :]
 
         # convert GENE's normalized particle and heat flux into SI units
         avgIonParticleFluxGeneGrid = genecomm_unitconversion.particleflux_gene_to_SI(avgIonParticleFluxHatGeneGrid, self.nref, self.Tref, self.mref, self.Bref, self.Lref)

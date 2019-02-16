@@ -224,9 +224,9 @@ def problem_setup():
     # Initial Conditions for the density and pressure profiles
     (densityICTango, ionPressureICTango, electronPressureICTango) = helper.initial_conditions(rhoTango)
     
-    # specify species masses and charges
-    mass = np.array([2.0, 2.0/200])
-    charge = np.array([1, -1])
+    # specify species masses and charges.  Here, electrons are first, ions second
+    mass = np.array([2.0/200, 2.0])
+    charge = np.array([-1, 1])
     
     
     # GENE setup

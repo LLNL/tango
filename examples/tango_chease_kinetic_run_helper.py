@@ -73,8 +73,8 @@ def Sn_func(rho):
     
     total input N = 2e20 particles/s
     """
-    Sn = 8.80176086347e20 * np.exp(-(rho - 0.80)**2 / 0.05**2) # for negative triangularity.  totalN = 2e20
     Sn = 9.06177465714e20 * np.exp(-(rho - 0.80)**2 / 0.05**2) # for positive triangularity
+    # Sn = 8.80176086347e20 * np.exp(-(rho - 0.80)**2 / 0.05**2) # for negative triangularity.
     return Sn
 
 def Si_func(rho):
