@@ -1,5 +1,4 @@
 """
-**!!!!!!!!!!!!!!!!!!!! NOT READY YET.  NEEDS TO BE EDITED.  !!!!!!!!!!!!!!!!!!**
 File with some helper functions for tango_chease_kinetic_run
 
 Specifying initial profiles and source
@@ -70,28 +69,33 @@ def initial_conditions(rho):
 def Sn_func(rho):
     """Particle source Sn.  To be later multiplied by V'
     
-    note: total input # particles/second is a * integral(V' Sn, [rho, 0, 0.85]) = a * np.trapz(Vprime*Sn, rho)
+    note: total input # particles/second is a * integral(V' Sn, [rho, 0, 0.95]) = a * np.trapz(Vprime*Sn, rho)
+    
+    total input N = 2e20 particles/s
     """
-    pnfit = np.array([8.03e18, 1.44e19, 2.80e18])
-    Sn = np.polyval(pnfit, rho)
-    Sn *= 4 # manual adjustment
+    Sn = 8.80176086347e20 * np.exp(-(rho - 0.80)**2 / 0.05**2) # for negative triangularity.  totalN = 2e20
+    Sn = 9.06177465714e20 * np.exp(-(rho - 0.80)**2 / 0.05**2) # for positive triangularity
     return Sn
 
 def Si_func(rho):
     """Ion heat source Si.  To be later multiplied by V'
+    
+    for positive TCV case.  total input Pi = .05 MW.
     """
-    pifit = np.array([-9.9e5, 1.18e6, -2.36e5, 5.51e4])
-    Si = np.polyval(pifit, rho)
-    Si *= 15 # manual adjustment
+    Si = 1.42372145293e5 * np.exp(-(rho - 0.60)**2 / 0.1**2)  # positive triangularity
+    # Si = 1.4428908097e5 * np.exp(-(rho - 0.60)**2 / 0.10**2) # negative triangularity
+    Si *= 4  # to get to 0.2 MW
     return Si
 
 
 def Se_func(rho):
     """Electron heat source Se.  To be later multiplied by V'
+    
+    for positive TCV case.  total input Pe = 1.5 MW
     """
-    pefit = np.array([-3.54e6, 5.81e6, -2.71e6, 4.56e5, 8.14e2])
-    Se = np.polyval(pefit, rho)
-    Se *= 15 # manual adjustment
+    Se = 4.2711643588e6 * np.exp(-(rho - 0.60)**2 / 0.1**2) # positive triangularity
+    # Se = 4.328672429e6 * np.exp(-(rho - 0.60)**2 / 0.10**2)  # negative triangularity
+    Se *= 2 # to get to 3 MW
     return Se
 
     

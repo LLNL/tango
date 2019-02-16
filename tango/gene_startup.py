@@ -158,8 +158,8 @@ def setup_gene_run_singleion_chease_adiabaticelectrons(
 
 
 def setup_gene_run_singleion_chease_kineticelectrons(
-    cheaseTangoData, xTango, xGene, mass, charge, densityTangoGrid,
-    Tref, nref, fromCheckpoint=True, pseudoGene=False):
+        cheaseTangoData, xTango, xGene, mass, charge, Tref, nref,
+        fromCheckpoint=True, pseudoGene=False):
     """Do all the necessary setup for a tango run using GENE, in a mode with one ion species, adibatic electrons, and chease geometry.
 
     This function works only starting from an initial condition.
@@ -171,10 +171,8 @@ def setup_gene_run_singleion_chease_kineticelectrons(
       xGene                 GENE's grid for radial coordinate, with x = rho_tor (array)
       mass                  species masses, in proton masses (1D array, by species)
       charge                species charges, in elementary charges (1D array, by species)
-      densityTangoGrid      density profile on Tango radial grid in m^-3 (array)
       Tref                  GENE reference temperature in kev (scalar)
       nref                  GENE reference density in 10^19 m^-3 (scalar)
-      gridMapper            object for interfacing between Tango and GENE grids [see interfacegrids_gene.py]
       fromCheckpoint        True if restarting GENE from a checkpoint (Boolean).  Must be True.
       pseudoGene            False for normal GENE run, True for a pseudo call that does not run GENE but is used to test code (Boolean)
     Outputs:

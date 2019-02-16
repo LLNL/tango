@@ -1,5 +1,4 @@
 """
-**!!!!!!!!!!!!!!!!!!!! NOT READY YET.  NEEDS TO BE EDITED.  !!!!!!!!!!!!!!!!!!**
 Checklist for a Gene-Tango run:
 GENE parameters file
     diagdir
@@ -35,18 +34,18 @@ import gene_tango # This must come before other tango imports, else it crashes o
 # Tango imports... should simplify these so I'm not importing them all separately!
 import tango
 import tango.gene_startup
-import tango.smoother
-import tango.genecomm_unitconversion
+#import tango.smoother
+#import tango.genecomm_unitconversion
 import tango.tango_logging as tlog
 import tango.utilities.util # for duration_as_hms
-import tango_kinetic_gene_run2_helper as helper  # helper module needs to be kept in same directory
+import tango.utilities.gene.read_chease_file as read_chease_file
+import tango_chease_kinetic_run_helper as helper  # helper module needs to be kept in same directory
 
 # constants
 MAXITERS = 50
-#DIAGDIR = '/scratch2/scratchdirs/jbparker/genedata/kin3/prob3/'   # scratch on Edison
-# DIAGDIR = '/global/cscratch1/sd/jbparker/genecori/prob##/'  # scratch on cori
-# DIAGDIR = '/p/lscratchh/parker68/q_gene/prob##/' # scratch on quartz
-SIMTIME = 50 # GENE simulation time per iteration, in Lref/cref
+SIMTIME = 30 # GENE simulation time per iteration, in Lref/cref
+CHEASEFILE = 'xyz.h5'  # 'TCV28008_t11.h5' for negative triangularity,  '28014_t12.h5' for positive triangularity
+EWMA_PARAM_TURB_FLUX = 0.1
 
 thetaParamsN = {'custom_ftheta': helper.n_custom_ftheta}
 thetaParamsPi = {'custom_ftheta': helper.const_ftheta}
@@ -54,27 +53,22 @@ thetaParamsPe = {'custom_ftheta': helper.const_ftheta}
 
 def initialize_iteration_parameters():
     maxIterations = MAXITERS
-    thetaParams = {'Dmin': 1e-2,
-                   'Dmax': 1e3,
-                   'dpdxThreshold': 400000}
-    EWMAParamTurbFlux = 0.1
+    EWMAParamTurbFlux = EWMA_PARAM_TURB_FLUX
     EWMAParamProfile = 1
-    lmParams = {'EWMAParamTurbFlux': EWMAParamTurbFlux,
-            'EWMAParamProfile': EWMAParamProfile,
-            'thetaParams': thetaParams}
     tol = 1e-11  # tol for convergence... reached when a certain error < tol
-    return (maxIterations, lmParams, tol)
+    return (maxIterations, EWMAParamTurbFlux, EWMAParamProfile, tol)
 
 
 # define collisional energy exchange term
     
 # ============================================================================== #
-# Define the terms in the Transport Equations:  density, ion pressure, elcetron pressure
+# Define the terms in the Transport Equations:  density, ion pressure, electron pressure
 
 # density transport equation
 class ComputeAllH_n(object):
-    def __init__(self, Vprime, minorRadius):
+    def __init__(self, Vprime, gxxAvg, minorRadius):
         self.Vprime = Vprime
+        self.gxxAvg = gxxAvg  # <grad x dot grad x>, used for adhoc diffusion coefficients in geometry
         self.minorRadius = minorRadius
     def __call__(self, t, x, profiles, HCoeffsTurb):
         #n = profiles['n']
@@ -86,7 +80,7 @@ class ComputeAllH_n(object):
         
         # add some manually input diffusivity
         D_adhoc = 0.10  # in SI, m^2/s
-        H2_adhoc = D_adhoc * self.Vprime
+        H2_adhoc = D_adhoc * self.Vprime * self.gxxAvg
         
         # Particle source
         H7 = self.Vprime * helper.Sn_func(x / self.minorRadius)
@@ -98,8 +92,9 @@ class ComputeAllH_n(object):
 
 # ion pressure transport equation
 class ComputeAllH_pi(object):
-    def __init__(self, Vprime, minorRadius):
+    def __init__(self, Vprime, gxxAvg, minorRadius):
         self.Vprime = Vprime
+        self.gxxAvg = gxxAvg
         self.minorRadius = minorRadius
     def __call__(self, t, x, profiles, HCoeffsTurb):
         n = profiles['n']
@@ -111,7 +106,7 @@ class ComputeAllH_pi(object):
         
         # add some manually input diffusivity
         D_adhoc = 0.2  # in SI, m^2/s
-        H2_adhoc = D_adhoc * self.Vprime
+        H2_adhoc = D_adhoc * self.Vprime * self.gxxAvg
         
         # Ion heat source
         H7 = self.Vprime * helper.Si_func(x / self.minorRadius)
@@ -129,8 +124,9 @@ class ComputeAllH_pi(object):
 
 # electron pressure transport equation
 class ComputeAllH_pe(object):
-    def __init__(self, Vprime, minorRadius):
+    def __init__(self, Vprime, gxxAvg, minorRadius):
         self.Vprime = Vprime
+        self.gxxAvg = gxxAvg
         self.minorRadius = minorRadius
     def __call__(self, t, x, profiles, HCoeffsTurb):
         n = profiles['n']
@@ -143,7 +139,7 @@ class ComputeAllH_pe(object):
         
         # add some manually input diffusivity
         D_adhoc = 0.15  # in SI, m^2/s
-        H2_adhoc = D_adhoc * self.Vprime
+        H2_adhoc = D_adhoc * self.Vprime * self.gxxAvg
         
         # Electron heat source
         H7 = self.Vprime * helper.Se_func(x / self.minorRadius)
@@ -163,75 +159,84 @@ def problem_setup():
     Take care of a lot of initialization and boilerplate.
     """
     # Set up problem parameters
-    minorRadius = 0.594     # minor radius a, in meters
-    majorRadius = 1.65      # major radius R0, in meters
+    ########### NEW
     
     # Set up the turbulence (GENE) grid
-    rhoLeftBndyGene = 0.15
-    rhoRightBndy = 0.85
-    numRadialPtsGene = 360  # from parameters file... needs to be consistent
+    rhoLeftBndyGene = 0.55
+    rhoRightBndy = 0.95
+    numRadialPtsGene = 180  # from parameters file... needs to be consistent
     rhoGene = np.linspace(rhoLeftBndyGene, rhoRightBndy, numRadialPtsGene)
-    xGene = rhoGene * minorRadius
-    dxGene = xGene[1] - xGene[0]
     
     # Set up the transport (Tango) grid
-    numRadialPtsTango = 53
+    numRadialPtsTango = 54
     drho = rhoRightBndy / (numRadialPtsTango - 0.5)  # spatial grid size
-    rhoTango = np.linspace(drho/2, rhoRightBndy, numRadialPtsTango)  # Tango inner-most point is set at delta rho/2, not exactly zero.
-    xTango = rhoTango * minorRadius # physical radius r, measured in meters, used as the independent coordinate in Tango
+    rhoTango = np.linspace(drho / 2, rhoRightBndy, numRadialPtsTango)  # Tango inner-most point is set at delta rho/2, not exactly zero.
+    
+    # Get CHEASE data
+    cheaseTangoData = read_chease_file.get_chease_data_on_Tango_grid(CHEASEFILE, rhoTango)
+    minorRadius = cheaseTangoData.minorRadius
+    Lref = cheaseTangoData.Lref
+    majorRadius = Lref
+    Bref = cheaseTangoData.Bref
+    VprimeTango = cheaseTangoData.dVdx
+    gxxAvgTango = cheaseTangoData.gxxAvg  # average <g^xx> = <grad x dot grad x>
+    gradxAvgTango = cheaseTangoData.gradxAvg
+    
+    
+    xGene = rhoGene * minorRadius
+    dxGene = xGene[1] - xGene[0]
+    xTango = rhoTango * minorRadius  # rho_tor, measured in meters, used as the independent coordinate in Tango
     # drTango = rTango[1] - rTango[0]
     L = xTango[-1]  # size of domain
+
+    Tref = 1
+    nref = 1
+    ionMass = 2  # in proton masses
+    mref = ionMass    
     
-    #VprimeGene = 4 * np.pi**2 * majorRadius * rGene
-    VprimeTango = 4 * np.pi**2 * majorRadius * xTango
-    #gradPsiSqTango = np.ones_like(rTango) # |grad r|^2 = 1
-    
-    Bref = 2.5
-    B0 = Bref
-    Lref = 1.65
-    Tref = 3.5
-    nref = 5
-    mref = 2    # in proton masses
     
     # create object for interfacing tango and GENE radial grids
     # must be consistent with whether Tango's or Gene's radial domain extends farther radially outward
-    rExtrapZoneLeft = 0.75 * minorRadius
-    rExtrapZoneRight = 0.80 * minorRadius
+    rExtrapZoneLeft = 0.80 * minorRadius
+    rExtrapZoneRight = 0.85 * minorRadius
     polynomialDegree = 0
     gridMapper = tango.interfacegrids_gene.TangoOutsideExtrapCoeffs(xTango, xGene, rExtrapZoneLeft, rExtrapZoneRight, polynomialDegree)
     
+    # map <|grad x|^2> and <|grad x|> to turbulence grid
+    gxxAvgTurb = gridMapper.map_profile_onto_turb_grid(gxxAvgTango)
+    gradxAvgTurb = gridMapper.map_profile_onto_turb_grid(gradxAvgTango)
+    
+    
     #============================================================================#
     # Boundary Conditions at the outer radial boundary.
-    n_BC = 5e19
-    Ti_keV_BC = 1.08
-    Te_keV_BC = 1.08
+    n_BC = 0.55e19
+    Ti_keV_BC = 0.25
+    Te_keV_BC = 0.25
     
     # Convert to pressure boundary condition
     e = 1.60217662e-19          # electron charge
     pi_BC = n_BC * Ti_keV_BC * 1000 * e
     pe_BC = n_BC * Te_keV_BC * 1000 * e
     
+    
+    
     #============================================================================#
     # Initial Conditions for the density and pressure profiles
     (densityICTango, ionPressureICTango, electronPressureICTango) = helper.initial_conditions(rhoTango)
     
     # specify species masses and charges
-    mass = np.array([2.0, 2.0/400])
+    mass = np.array([2.0, 2.0/200])
     charge = np.array([1, -1])
     
-    # specify safety factor
-    safetyFactorGeneGrid = 0.868 + 2.2 * rhoGene**2
     
     # GENE setup
     fromCheckpoint = True    # true if restarting a simulation from an already-saved checkpoint
-    geneFluxModel = tango.gene_startup.setup_gene_run_singleion_kineticelectrons(
-                xTango, xGene, minorRadius, majorRadius, B0, mass, charge, safetyFactorGeneGrid,
-                Bref, Lref, Tref, nref, fromCheckpoint)
+    geneFluxModel = tango.gene_startup.setup_gene_run_singleion_chease_kineticelectrons(
+                cheaseTangoData, xTango, xGene, mass, charge, Tref, nref, fromCheckpoint)
 
     # iteration parameters setup
-    #### NEW: need to do separate lmparams for each field??
-    (maxIterations, lmParams, tol) = initialize_iteration_parameters()    
-    
+    (maxIterations, EWMAParamTurbFlux, EWMAParamProfile, tol) = initialize_iteration_parameters()
+
     # create flux smoother for spatial averaging of flux
     windowSizeInGyroradii = 10
     rhoref = tango.genecomm_unitconversion.rho_ref(Tref, mref, Bref)
@@ -240,17 +245,17 @@ def problem_setup():
     
     tArray = np.array([0, 1e4])  # specify the timesteps to be used.
     
-    ### NEW
-    
     # creation of turbulence handler
-    turbHandler = tango.lodestro_method.TurbulenceHandler(dxGene, xTango, geneFluxModel, VprimeTango=VprimeTango, fluxSmoother=fluxSmoother)
+    turbHandler = tango.lodestro_method.TurbulenceHandler(dxGene, xTango, geneFluxModel, VprimeTango=VprimeTango, fluxSmoother=fluxSmoother,
+                                                          gxxAvgTango=gxxAvgTango, gradxAvgTango=gradxAvgTango)
     
     ## *************************** ##
     # set up for density equation
-    compute_all_H_n = ComputeAllH_n(VprimeTango, minorRadius)
+    compute_all_H_n = ComputeAllH_n(VprimeTango, gxxAvgTango, minorRadius)
     
-    lm_n = tango.lodestro_method.lm(lmParams['EWMAParamTurbFlux'], lmParams['EWMAParamProfile'], thetaParamsN)
-    # seed the EWMA for the turbulent particle flux
+    lm_n = tango.lodestro_method.lm(EWMAParamTurbFlux, EWMAParamProfile, thetaParamsN,
+                                    gxxAvgTurb=gxxAvgTurb, gradxAvgTurb=gradxAvgTurb)
+    # seed the EWMA D,c for the turbulent particle flux
     particleFluxSeed = helper.read_seed_turb_flux('particle_flux_seed_ions')
     smoothedFluxTurbGrid = fluxSmoother.smooth(particleFluxSeed)
     densityTurbGrid = gridMapper.map_profile_onto_turb_grid(densityICTango)
@@ -265,9 +270,10 @@ def problem_setup():
     
     ## *************************** ##
     # set up for ion pressure equation
-    compute_all_H_pi = ComputeAllH_pi(VprimeTango, minorRadius)
-    lm_pi = tango.lodestro_method.lm(lmParams['EWMAParamTurbFlux'], lmParams['EWMAParamProfile'], thetaParamsPi)
-    # seed the EWMA for the turbulent ion heat flux
+    compute_all_H_pi = ComputeAllH_pi(VprimeTango, gxxAvgTango, minorRadius)
+    lm_pi = tango.lodestro_method.lm(EWMAParamTurbFlux, EWMAParamProfile, thetaParamsPi,
+                                     gxxAvgTurb=gxxAvgTurb, gradxAvgTurb=gradxAvgTurb)
+    # seed the EWMA D,c for the turbulent ion heat flux
     ionHeatFluxSeed = helper.read_seed_turb_flux('heat_flux_seed_ions')
     smoothedFluxTurbGrid = fluxSmoother.smooth(ionHeatFluxSeed)
     ionPressureTurbGrid = gridMapper.map_profile_onto_turb_grid(ionPressureICTango)
@@ -282,9 +288,10 @@ def problem_setup():
     
     ## *************************** ##
     # set up for electron pressure equation
-    compute_all_H_pe = ComputeAllH_pe(VprimeTango, minorRadius)
-    lm_pe = tango.lodestro_method.lm(lmParams['EWMAParamTurbFlux'], lmParams['EWMAParamProfile'], thetaParamsPe)
-    # seed the EWMA for the turbulent electron heat flux
+    compute_all_H_pe = ComputeAllH_pe(VprimeTango, gxxAvgTango, minorRadius)
+    lm_pe = tango.lodestro_method.lm(EWMAParamTurbFlux, EWMAParamProfile, thetaParamsPe,
+                                     gxxAvgTurb=gxxAvgTurb, gradxAvgTurb=gradxAvgTurb)
+    # seed the EWMA D,c for the turbulent electron heat flux
     electronHeatFluxSeed = helper.read_seed_turb_flux('heat_flux_seed_electrons')
     smoothedFluxTurbGrid = fluxSmoother.smooth(electronHeatFluxSeed)
     electronPressureTurbGrid = gridMapper.map_profile_onto_turb_grid(electronPressureICTango)
@@ -351,7 +358,7 @@ filenameTangoHistory = basename + '_s{}'.format(setNumber) + '.hdf5'
 #  specify how long GENE runs between Tango iterations.  Specified in Lref/cref
 geneFluxModel.set_simulation_time(SIMTIME)
 
-# initialize the user control function, if applicable.  If using it, then it needs to be passed as a parameter when intializaing solver
+# initialize the user control function, if applicable.  If using it, then it needs to be passed as a parameter when initializing solver
 #densityICTango = fields[0].profile_mminus1
 #user_control_func = UserControlFunc(densityICTango)
 
