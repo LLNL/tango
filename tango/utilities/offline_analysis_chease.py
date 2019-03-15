@@ -341,18 +341,15 @@ def Sn_func(rho):
     
     note: total input # particles/second is a * integral(V' Sn, [rho, 0, 0.85]) = a * np.trapz(Vprime*Sn, rho)
     """
-    pnfit = np.array([8.03e18, 1.44e19, 2.80e18])
-    Sn = np.polyval(pnfit, rho)
-    Sn /= 1.11100797 # manual adjustment for positive triangularity
-    #Sn /= 1.1342896 # manual adjustment for negative triangularity
-    Sn *= 10
+    # Sn = 9.06177465714e20 * np.exp(-(rho - 0.80)**2 / 0.05**2) # for positive triangularity
+    Sn = 8.80176086347e20 * np.exp(-(rho - 0.80)**2 / 0.05**2) # for negative triangularity.  totalN = 2e20
     return Sn
 
 def Si_func(rho):
     """Ion heat source.  To be later multiplied by V'
     """
-    Si = 1.42372145293e5 * np.exp(-(rho - 0.60)**2 / 0.1**2)  # positive triangularity
-    # Si = 1.4428908097e5 * np.exp(-(rho - 0.60)**2 / 0.10**2) # negative triangularity
+    #Si = 1.42372145293e5 * np.exp(-(rho - 0.60)**2 / 0.10**2)  # positive triangularity
+    Si = 1.4428908097e5 * np.exp(-(rho - 0.60)**2 / 0.10**2) # negative triangularity
     Si *= 4  # to get to 0.2 MW
     return Si
 
@@ -360,8 +357,8 @@ def Si_func(rho):
 def Se_func(rho):
     """Electron heat source.  To be later multiplied by V'
     """
-    Se = 4.2711643588e6 * np.exp(-(rho - 0.60)**2 / 0.1**2) # positive triangularity
-    # Se = 4.328672429e6 * np.exp(-(rho - 0.60)**2 / 0.10**2)  # negative triangularity
+    # Se = 4.2711643588e6 * np.exp(-(rho - 0.60)**2 / 0.10**2) # positive triangularity
+    Se = 4.328672429e6 * np.exp(-(rho - 0.60)**2 / 0.10**2)  # negative triangularity
     Se *= 2 # to get to 3 MW
     return Se
 

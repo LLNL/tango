@@ -186,8 +186,8 @@ Contains
     !basic species settings
     mref = -1.
 	
-	! get mref from first ion species [in case an ion is not the first species]
-	do n=0, n_spec-1
+    ! get mref from first ion species [in case an ion is not the first species]
+    do n=0, n_spec-1
        if (spec(n)%charge .ge. 0. .and. mref .lt. 0) mref = mass_in(n)
     enddo
 	
