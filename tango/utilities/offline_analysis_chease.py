@@ -111,8 +111,23 @@ class analysis:
         xExtrapZoneLeft = rhoExtrapZoneLeft * minorRadius
         xExtrapZoneRight = rhoExtrapZoneRight * minorRadius
         polynomialDegree = 0
-        self.gridMapper = tango.interfacegrids_gene.TangoOutsideExtrapCoeffs(
-                xTango, xTurb, xExtrapZoneLeft, xExtrapZoneRight, polynomialDegree)
+        
+        # for testing extrapolation at inner boundary
+        rhoInnerExtrapZoneLeft = 0.55
+        rhoInnerExtrapZoneRight = 0.60
+        xInnerExtrapZoneLeft = rhoInnerExtrapZoneLeft * minorRadius
+        xInnerExtrapZoneRight = rhoInnerExtrapZoneRight * minorRadius
+        
+        
+        
+#        self.gridMapper = tango.interfacegrids_gene.TangoOutsideExtrapCoeffs(
+#                xTango, xTurb, xExtrapZoneLeft, xExtrapZoneRight, polynomialDegree)
+        
+        self.gridMapper = tango.interfacegrids_gene.TangoOutsideExtrapCoeffsBothSides(
+                xTango, xTurb,
+                xInnerExtrapZoneLeft, xInnerExtrapZoneRight,
+                xExtrapZoneLeft, xExtrapZoneRight,
+                polynomialDegree)
     
         # set up flux smoother for spatial averaging of flux
         windowSizeInGyroradii = 5
