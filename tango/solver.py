@@ -385,12 +385,18 @@ class Solver(object):
             unacceptable        True if any new profile is unacceptably far away (bool)  
         """
         defaultMaxFractionalChange = 0.2 # if no value provided
+        defaultInnerFraction = 0.5 # if no value provided
         maxFractionalChange = self.treadLightlyParams.get('maxFractionalChange', defaultMaxFractionalChange)
+        innerFraction = self.treadLightlyParams.get('innerFraction', defaultInnerFraction)
+        
         
         # loop through profiles
         for field in self.fields:
             label = field.label
-            unacceptable = self.is_unacceptable_one_profile(oldProfiles[label], newProfiles[label], maxFractionalChange=maxFractionalChange)
+            unacceptable = self.is_unacceptable_one_profile(oldProfiles[label],
+                                                            newProfiles[label],
+                                                            maxFractionalChange=maxFractionalChange,
+                                                            innerFraction=innerFraction)
             if unacceptable:
                 return True
         return False
@@ -555,7 +561,7 @@ class Solver(object):
 #### End class solver    
 
 #### Helper functions
-def is_unacceptable_one_profile(oldProfile, newProfile, maxFractionalChange=0.2):
+def is_unacceptable_one_profile(oldProfile, newProfile, maxFractionalChange=0.2, innerFraction=0.5):
     """Return True if new_profile is unacceptably "far away" from old_profile.  Otherwise, return False.
     
     If any point in the new profile has increased or decreases by more than x% compared to the old profile, that 
@@ -575,10 +581,10 @@ def is_unacceptable_one_profile(oldProfile, newProfile, maxFractionalChange=0.2)
     """
     unacceptable = False
     N = len(oldProfile)
-    fraction = 0.5
-    # get only the inner 50% of the domain
-    oldProfileInner = oldProfile[0:int(fraction * N)]
-    newProfileInner = newProfile[0:int(fraction * N)]
+
+    # get only the inner fraction% of the domain
+    oldProfileInner = oldProfile[0:int(innerFraction * N)]
+    newProfileInner = newProfile[0:int(innerFraction * N)]
     
     # calculation the pointwise change of each point
     fractionalChange = (newProfileInner - oldProfileInner) / oldProfileInner
