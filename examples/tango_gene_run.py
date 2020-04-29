@@ -276,9 +276,14 @@ def problem_setup():
     compute_all_H_pressure = ComputeAllH(VprimeTango, minorRadius, majorRadius, A)
     lodestroMethod = tango.lodestro_method.lm(lmParams['EWMAParamTurbFlux'], lmParams['EWMAParamProfile'], lmParams['thetaParams'])
     
-    # seed the EWMA for the turbulent heat flux
+    # seed the EWMA D,c for the turbulent heat flux
     heatFluxSeed = read_seed_turb_flux()
-    lodestroMethod.set_ewma_turb_flux(heatFluxSeed)
+    smoothedFluxTurbGrid = fluxSmoother.smooth(heatFluxSeed)
+    pressureTurbGrid = gridMapper.map_profile_onto_turb_grid(pressureICTango)
+    #   convert flux to D,c
+    (DTurbGrid, cTurbGrid, _) = lodestroMethod.flux_to_transport_coeffs(smoothedFluxTurbGrid, pressureTurbGrid, drGene)
+    lodestroMethod.set_ewma_turb_D(DTurbGrid)
+    lodestroMethod.set_ewma_turb_c(cTurbGrid)
     
     field0 = tango.multifield.Field(
                 label='pi', rightBC=pressureRightBC, profile_mminus1=pressureICTango, compute_all_H=compute_all_H_pressure,
