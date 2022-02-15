@@ -14,6 +14,7 @@ import matplotlib.pyplot as plt
 import tango.tango_logging as tlog
 from tango.extras import shestakov_nonlinear_diffusion
 from tango.extras.fluxrelaxation import FluxRelaxation, FluxDoubleRelaxation
+from tango.extras.noisyflux import NoisyFlux
 import tango
 
 
@@ -38,7 +39,7 @@ def initialize_parameters():
         "EWMAParamProfile": EWMAParamProfile,
         "thetaParams": thetaParams,
     }
-    tol = 1e-11  # tol for convergence... reached when a certain error < tol
+    tol = 1e-2  # tol for convergence... reached when a certain error < tol
     return (maxIterations, lmParams, tol)
 
 
@@ -59,109 +60,143 @@ class ComputeAllH(object):
 
 
 # ==============================================================================
+#  Settings
+# ==============================================================================
+
+timescales = [1e-3, 0.1, 0.2, 0.5, 1, 2, 5, 10]
+damping_multipliers = [1.0, 2.0, 5.0]
+
+noise_amplitude = 1e-3  # Amplitude of noise to add
+noise_scalelength = 10.0  # Spatial scale length (number of cells)
+
+num_samples = 20  # Number of repeated solves, to gather statistics
+
+# ==============================================================================
 #  MAIN STARTS HERE
 # ==============================================================================
 tlog.setup()
 
-plt.figure()
+fig1, ax1 = plt.subplots()
+fig2, ax2 = plt.subplots()
 
-timescales = [1e-3, 0.1, 0.2, 0.5, 1, 2, 5, 10]
-
-for damping_multiplier in [1.0, 2.0, 5.0]:
-    iterations = []
+for damping_multiplier in damping_multipliers:
+    mean_iterations = []
+    max_iterations = []
+    min_iterations = []
     for turb_timescale in timescales:
-
-        tlog.info("Initializing...")
-        L, N, dx, x, nL, n = initialize_shestakov_problem()
-        maxIterations, lmParams, tol = initialize_parameters()
-        fluxModel = FluxDoubleRelaxation(
-            shestakov_nonlinear_diffusion.AnalyticFluxModel(dx),
-            turb_timescale,
-            damping_multiplier * turb_timescale,
-        )
-
-        label = "n"
-        turbHandler = tango.lodestro_method.TurbulenceHandler(dx, x, fluxModel)
-
-        compute_all_H_density = ComputeAllH()
-        lodestroMethod = tango.lodestro_method.lm(
-            lmParams["EWMAParamTurbFlux"],
-            lmParams["EWMAParamProfile"],
-            lmParams["thetaParams"],
-        )
-        field0 = tango.multifield.Field(
-            label=label,
-            rightBC=nL,
-            profile_mminus1=n,
-            compute_all_H=compute_all_H_density,
-            lodestroMethod=lodestroMethod,
-        )
-        fields = [field0]
-        tango.multifield.check_fields_initialize(fields)
-
-        compute_all_H_all_fields = tango.multifield.ComputeAllHAllFields(
-            fields, turbHandler
-        )
-
-        tArray = np.array([0, 1e4])  # specify the timesteps to be used.
-
-        solver = tango.solver.Solver(
-            L, x, tArray, maxIterations, tol, compute_all_H_all_fields, fields
-        )
-
-        tlog.info("Initialization complete.")
-        tlog.info("Entering main time loop...")
-
-        while solver.ok:
-            # Implicit time advance: iterate to solve the nonlinear equation!
-            solver.take_timestep()
-
-        n = solver.profiles[label]  # finished solution
-        nss = shestakov_nonlinear_diffusion.steady_state_solution(x, nL)
-
-        solutionResidual = (n - nss) / np.max(np.abs(nss))
-        solutionRmsError = np.sqrt(1 / len(n) * np.sum(solutionResidual ** 2))
-
-        if solver.reachedEnd == True:
-            print("The solution has been reached successfully.")
-            print(
-                "Error compared to analytic steady state solution is %f"
-                % (solutionRmsError)
-            )
-        else:
-            print("The solver failed for some reason.")
-            print(
-                "Error at end compared to analytic steady state solution is %f"
-                % (solutionRmsError)
+        its = []  # Iterations for these settings
+        for sample in range(num_samples):
+            tlog.info("Initializing...")
+            L, N, dx, x, nL, n = initialize_shestakov_problem()
+            maxIterations, lmParams, tol = initialize_parameters()
+            fluxModel = NoisyFlux(
+                FluxDoubleRelaxation(
+                    shestakov_nonlinear_diffusion.AnalyticFluxModel(dx),
+                    turb_timescale,
+                    damping_multiplier * turb_timescale,
+                ),
+                noise_amplitude,
+                noise_scalelength,
+                1.0,
             )
 
-        iterations.append(len(solver.errHistoryFinal))
+            label = "n"
+            turbHandler = tango.lodestro_method.TurbulenceHandler(dx, x, fluxModel)
 
-        # plt.plot(solver.errHistoryFinal, label = str(turb_timescale))
+            compute_all_H_density = ComputeAllH()
+            lodestroMethod = tango.lodestro_method.lm(
+                lmParams["EWMAParamTurbFlux"],
+                lmParams["EWMAParamProfile"],
+                lmParams["thetaParams"],
+            )
+            field0 = tango.multifield.Field(
+                label=label,
+                rightBC=nL,
+                profile_mminus1=n,
+                compute_all_H=compute_all_H_density,
+                lodestroMethod=lodestroMethod,
+            )
+            fields = [field0]
+            tango.multifield.check_fields_initialize(fields)
 
-    # plt.legend()
-    # plt.yscale('log')
-    # plt.xlabel('iteration number')
-    # plt.ylabel('rms error')
-    # plt.savefig('residual_history.pdf')
-    # plt.savefig('residual_history.png')
-    # plt.figure()
+            compute_all_H_all_fields = tango.multifield.ComputeAllHAllFields(
+                fields, turbHandler
+            )
 
-    plt.plot(
+            tArray = np.array([0, 1e4])  # specify the timesteps to be used.
+
+            solver = tango.solver.Solver(
+                L, x, tArray, maxIterations, tol, compute_all_H_all_fields, fields
+            )
+
+            tlog.info("Initialization complete.")
+            tlog.info("Entering main time loop...")
+
+            while solver.ok:
+                # Implicit time advance: iterate to solve the nonlinear equation!
+                solver.take_timestep()
+
+            n = solver.profiles[label]  # finished solution
+            nss = shestakov_nonlinear_diffusion.steady_state_solution(x, nL)
+
+            solutionResidual = (n - nss) / np.max(np.abs(nss))
+            solutionRmsError = np.sqrt(1 / len(n) * np.sum(solutionResidual ** 2))
+
+            if solver.reachedEnd == True:
+                print("The solution has been reached successfully.")
+                print(
+                    "Error compared to analytic steady state solution is %f"
+                    % (solutionRmsError)
+                )
+            else:
+                print("The solver failed for some reason.")
+                print(
+                    "Error at end compared to analytic steady state solution is %f"
+                    % (solutionRmsError)
+                )
+
+            its.append(len(solver.errHistoryFinal))
+
+        # Plot error history on figure 1 (for the last sample)
+        ax1.plot(solver.errHistoryFinal, label=str(turb_timescale))
+
+        its = np.array(its)
+        mean_iterations.append(np.mean(its))
+        max_iterations.append(np.amax(its))
+        min_iterations.append(np.amin(its))
+        print(its)
+
+    # Plot iterations vs timescale on figure 2
+    ax2.plot(
         timescales,
-        iterations,
+        mean_iterations,
         "-o",
         label=r"$\tau_{{damp}} / \tau_{{turb}} = {}$".format(damping_multiplier),
     )
-    plt.axvline(1.0 / damping_multiplier, linestyle="--", color="k")
 
-plt.xscale("log")
-plt.yscale("log")
-plt.xlabel("Turbulence relaxation time")
-plt.ylabel("Iterations required")
-plt.legend()
+    if num_samples > 1:
+        print(mean_iterations, max_iterations, min_iterations)
+        ax2.fill_between(timescales, min_iterations, max_iterations, alpha=0.5)
 
-plt.savefig("iteration_count.pdf")
-plt.savefig("iteration_count.png")
+    ax2.axvline(1.0 / damping_multiplier, linestyle="--", color="k")
+
+# Plot of error against iteration
+ax1.set_yscale("log")
+ax1.set_xlabel("iteration number")
+ax1.set_ylabel("rms error")
+ax1.legend()
+
+fig1.savefig("residual_history.pdf")
+fig1.savefig("residual_history.png")
+
+# Plot of iteration count against timescale
+ax2.set_xscale("log")
+ax2.set_yscale("log")
+ax2.set_xlabel("Turbulence relaxation time")
+ax2.set_ylabel("Iterations required")
+ax2.legend()
+
+fig2.savefig("iteration_count.pdf")
+fig2.savefig("iteration_count.png")
 
 plt.show()
