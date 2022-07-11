@@ -377,7 +377,7 @@ class TurbulenceHandler(object):
             extradataAllFields[label] = {
                 'D': D, 'c': c,
                 'profileTurbGrid': profilesTurbGrid[label], 'profileEWMATurbGrid': profilesEWMATurbGrid[label],
-                'fluxTurbGrid': fluxesTurbGrid[label], 'smoothedFluxTurbGrid': smoothedFluxTurbGrid,
+                'fluxTurbGrid': fluxesTurbGrid[label], 'smoothedFluxTurbGrid': smoothedFluxTurbGrid, 'fluxEWMATurbGrid':fluxesTurbGrid[label],
                 'DTurbGrid': DTurbGrid, 'cTurbGrid': cTurbGrid, 'DEWMATurbGrid': DEWMATurbGrid, 'cEWMATurbGrid': cEWMATurbGrid,
                 'DHatTurbGrid': DcDataTurbGrid['DHat'], 'cHatTurbGrid': DcDataTurbGrid['cHat'], 'thetaTurbGrid': DcDataTurbGrid['theta']}
         
