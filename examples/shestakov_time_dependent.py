@@ -28,14 +28,14 @@ def initialize_shestakov_problem():
     return (L, N, dx, x, nL, nInitialCondition)
 
 class ComputeAllH(object):
-    def __init__(self):
-        pass
+    def __init__(self, test_problem):
+        self.test_problem = test_problem
 
     def __call__(self, t, x, profiles, HCoeffsTurb):
         # n = profiles['default']
         # Define the contributions to the H coefficients for the Shestakov Problem
         H1 = np.ones_like(x)
-        H7 = shestakov_nonlinear_diffusion.H7contrib_Source(x)
+        H7 = self.test_problem.H7contrib_Source(x)
 
         HCoeffs = tango.multifield.HCoefficients(H1=H1, H7=H7)
         HCoeffs = HCoeffs + HCoeffsTurb
@@ -61,9 +61,11 @@ def solve_system(noise_timescale = 1.0,    # AR time of random noise
                  ):
     tlog.info("Initializing...")
     L, N, dx, x, nL, n = initialize_shestakov_problem()
+    test_problem = shestakov_nonlinear_diffusion.ShestakovTestProblem(dx)
+
     fluxModel = NoisyFluxSpaceTime(
         FluxDoubleRelaxation(
-            shestakov_nonlinear_diffusion.AnalyticFluxModel(dx),
+            test_problem,
             turb_timescale,
             damping_timescale,
         ),
@@ -77,7 +79,6 @@ def solve_system(noise_timescale = 1.0,    # AR time of random noise
     label = "n"
     turbHandler = tango.lodestro_method.TurbulenceHandler(dx, x, fluxModel)
 
-    compute_all_H_density = ComputeAllH()
     lodestroMethod = tango.lodestro_method.lm(
         EWMAParamTurbFlux,
         EWMAParamProfile,
@@ -87,7 +88,7 @@ def solve_system(noise_timescale = 1.0,    # AR time of random noise
         label=label,
         rightBC=nL,
         profile_mminus1=n,
-        compute_all_H=compute_all_H_density,
+        compute_all_H=ComputeAllH(test_problem),
         lodestroMethod=lodestroMethod,
     )
     fields = [field0]
@@ -118,7 +119,9 @@ def solve_system(noise_timescale = 1.0,    # AR time of random noise
             solver.take_timestep()
 
         n = solver.profiles[label]  # finished solution
-        nss = shestakov_nonlinear_diffusion.steady_state_solution(x, nL)
+
+        source = test_problem.GetSource(x)
+        nss = test_problem.steady_state_solution(x, nL)
 
         solutionResidual = (n - nss) / np.max(np.abs(nss))
         solutionRmsError = np.sqrt(1 / len(n) * np.sum(solutionResidual ** 2))
