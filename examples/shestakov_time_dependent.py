@@ -61,7 +61,7 @@ def solve_system(noise_timescale = 1.0,    # AR time of random noise
                  ):
     tlog.info("Initializing...")
     L, N, dx, x, nL, n = initialize_shestakov_problem()
-    test_problem = shestakov_nonlinear_diffusion.ShestakovTestProblem(dx)
+    test_problem = shestakov_nonlinear_diffusion.ShestakovTestProblem(dx, p=15, q=-14)
 
     fluxModel = NoisyFluxSpaceTime(
         FluxDoubleRelaxation(
@@ -114,9 +114,18 @@ def solve_system(noise_timescale = 1.0,    # AR time of random noise
     num_iterations = 0
     restarts = []
     while num_iterations < maxIterations:
-        while solver.ok:
-            # Implicit time advance: iterate to solve the nonlinear equation!
-            solver.take_timestep()
+        try:
+            while solver.ok:
+                # Implicit time advance: iterate to solve the nonlinear equation!
+                solver.take_timestep()
+        except Exception as e:
+            # Failed
+            print("Solver failed with error: {}".format(e))
+            solver.reachedEnd = False
+            solutionResidual = 1e10
+            solutionRmsError = 1e10
+            num_iterations = maxIterations
+            break
 
         n = solver.profiles[label]  # finished solution
 
@@ -152,11 +161,18 @@ def solve_system(noise_timescale = 1.0,    # AR time of random noise
                 "Error at end compared to analytic steady state solution is %f"
                 % (solutionRmsError)
             )
+            if solutionRmsError < check_tol:
+                # Succeeded anyway
+                restarts.append(num_iterations)
+                solver.reachedEnd = True
+            else:
+                num_iterations = maxIterations
             break # Give up
 
-    err_history = np.concatenate(err_history)
-    profiles = np.concatenate(profile_history)
-    fluxes = np.concatenate(flux_history)
+    if err_history != []:
+        err_history = np.concatenate(err_history)
+        profiles = np.concatenate(profile_history)
+        fluxes = np.concatenate(flux_history)
 
     if plot_convergence:
         for j in range(num_iterations):
@@ -206,18 +222,18 @@ def collect_statistics(inputs, num_samples=20):
 #  Settings
 # ==============================================================================
 
-timescales = [1e-3, 0.1, 0.2, 0.5, 1, 2, 5, 10]
+timescales = [1.0] #1e-3, 0.1, 0.2, 0.5, 1, 2, 5, 10]
 damping_multipliers = [] #[1.0, 2.0, 5.0, 10]
-noise_multipliers = [1e-2, 1e-1, 1.0]
+noise_multipliers = [1e-2]#, 1e-1, 1.0]
 
 tolerance = 1e-2
-alpha_profile = 1
-alpha_flux = 0.05
+alpha_profile = 0.0
+alpha_flux = 0.0
 
 noise_amplitude = 0.01  # Amplitude of noise to add
 noise_scalelength = 10.0  # Spatial scale length (number of cells)
 
-num_samples = 20  # Number of repeated solves, to gather statistics
+num_samples = 1  # Number of repeated solves, to gather statistics
 
 # ==============================================================================
 #  MAIN STARTS HERE
@@ -319,13 +335,13 @@ plt.show()
 #  Settings
 # ==============================================================================
 
-turb_timescale = 10.0
+turb_timescale = 1.0
 damping_multiplier = 1.0
 noise_multiplier = 1.0
 
 tolerance = 1e-2
-alpha_ps = np.logspace(-1, 0, num=10)
-alpha_ds = np.logspace(-2.5, -1.5, num=10)
+alpha_ps = np.logspace(-2, 0, num=10)
+alpha_ds = np.logspace(-2, 0, num=10)
 
 noise_amplitude = 0.01  # Amplitude of noise to add
 noise_scalelength = 10.0  # Spatial scale length (number of cells)

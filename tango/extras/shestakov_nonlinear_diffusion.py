@@ -61,16 +61,16 @@ class AnalyticFluxModel:
 class ShestakovTestProblem(AnalyticFluxModel):
     """Test problem from Shestakov et al. (2003)
         Return the flux Gamma, which depends on the density profile n as follows:
-        Gamma[n] = -(dn/dx)^3 / n^2
+        Gamma[n] = -(dn/dx)^p * n^q
         """
-    def __init__(self, dx, S0 = 1, delta = 0.1):
+    def __init__(self, dx, p = 3, q = -2, S0 = 1, delta = 0.1):
         """
         # Inputs
         dx            Grid spacing
         S0            parameter in source term --- amplitude (scalar)
         delta         parameter in source term --- location where it turns off (scalar)
         """
-        super(ShestakovTestProblem, self).__init__(dx, p=3, q=-2, field='n')
+        super(ShestakovTestProblem, self).__init__(dx, p=p, q=q, field='n')
         self.S0 = S0
         self.delta = delta
 
@@ -85,15 +85,22 @@ class ShestakovTestProblem(AnalyticFluxModel):
         return S
 
     def steady_state_solution(self, x, nL):
-        """Return the exast steady state solution for the Shestakov test problem
+        """Return the exact steady state solution for the Shestakov test problem
+        Generalised for arbitrary p, q
 
         Inputs:
         x             Spatial coordinate grid (array)
         nL            boundary condition n(L) (scalar)
         Outputs:
         """
-        nright = ( nL**(1/3) + 1/3 * (self.S0 * self.delta)**(1/3) *(1-x) )**3
-        nleft = ( nL**(1/3) + 1/3 * (self.S0 * self.delta)**(1/3) * (1 - self.delta + (3/4) * (self.delta - x**(4/3) / self.delta**(1/3))))**3
+
+        coef = self.q / self.p + 1.  # This is 1/3 for p=3,q=-2 standard case
+        L = 1.0
+
+        # Solution in region delta < x < L
+        nright = (nL**coef + coef * (self.S0 * self.delta)**(1./self.p) * (L - x))**(1./coef)
+        nleft = (nL**coef + coef * (self.S0 * self.delta)**(1./self.p) * (L - self.delta + (self.p/(self.p + 1)) * (self.delta - x * (x / self.delta)**(1./self.p))))**(1./coef)
+
         nss = nright
         nss[x < self.delta] = nleft[x < self.delta]
         return nss
