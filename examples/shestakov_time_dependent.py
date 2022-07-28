@@ -13,7 +13,7 @@ import matplotlib.pyplot as plt
 
 import tango.tango_logging as tlog
 from tango.extras import shestakov_nonlinear_diffusion
-from tango.extras.fluxrelaxation import FluxRelaxation, FluxDoubleRelaxation
+from tango.extras.fluxrelaxation import FluxRelaxation, FluxDoubleRelaxation, FluxRelaxationOscillation, FluxAverage
 from tango.extras.noisyflux import NoisyFlux, NoisyFluxSpaceTime
 import tango
 
@@ -47,34 +47,37 @@ class ComputeAllH(object):
 # ==============================================================================
 
 def solve_system(noise_timescale = 1.0,    # AR time of random noise
-                 turb_timescale = 1.0,     # Flux relaxation time
-                 damping_timescale = 1.0,  # Flux damping timescale
+                 flux_timescale = 1.0,     # Flux relaxation time
+                 oscillation_amplitude = 0.0,  # Flux oscillation relative amplitude
                  noise_amplitude = 0.0,    # Amplitude of AR(1) noise
                  noise_scalelength = 10,   # Spatial scale length (cells)
                  EWMAParamTurbFlux = 0.01,
                  EWMAParamProfile = 1.0,
+                 p = 3,
+                 q = -2,
                  thetaParams = {"Dmin": 1e-5, "Dmax": 1e13, "dpdxThreshold": 10},
                  tol = 1e-2,
                  maxIterations = 1000,
-                 plot_convergence = False,
+                 plot_convergence = True,
                  check_tol = 0.1
                  ):
     tlog.info("Initializing...")
     L, N, dx, x, nL, n = initialize_shestakov_problem()
-    test_problem = shestakov_nonlinear_diffusion.ShestakovTestProblem(dx, p=15, q=-14)
+    test_problem = shestakov_nonlinear_diffusion.ShestakovTestProblem(dx, p=p, q=q)
 
-    fluxModel = NoisyFluxSpaceTime(
-        FluxDoubleRelaxation(
-            test_problem,
-            turb_timescale,
-            damping_timescale,
-        ),
-        noise_amplitude,
-        noise_scalelength,
-        1.0, # dx
-        noise_timescale, # noise timescale
-        1.0 # dt
-    )
+    nsteps = 200
+    fluxModel = FluxAverage(
+        nsteps, # Number of steps
+        NoisyFluxSpaceTime(
+            noise_amplitude,
+            noise_scalelength,
+            1.0, # dx
+            noise_timescale * nsteps, # noise timescale
+            1.0, # dt
+            FluxRelaxationOscillation(
+                flux_timescale * nsteps,
+                oscillation_amplitude,
+                test_problem)))
 
     label = "n"
     turbHandler = tango.lodestro_method.TurbulenceHandler(dx, x, fluxModel)
@@ -222,15 +225,18 @@ def collect_statistics(inputs, num_samples=20):
 #  Settings
 # ==============================================================================
 
-timescales = [1.0] #1e-3, 0.1, 0.2, 0.5, 1, 2, 5, 10]
-damping_multipliers = [] #[1.0, 2.0, 5.0, 10]
-noise_multipliers = [1e-2]#, 1e-1, 1.0]
+timescales = np.logspace(np.log10(0.01), np.log10(10), 7)
+oscillation_amplitudes = []#, 1e-2, 1e-1]
+noise_multipliers = [0.2]
 
-tolerance = 1e-2
-alpha_profile = 0.0
-alpha_flux = 0.0
+tolerance = 1e-1
+alpha_profile = 0.03
+alpha_flux = 0.1
 
-noise_amplitude = 0.01  # Amplitude of noise to add
+shestakov_p = 15
+shestakov_q = -10
+
+noise_amplitude = 0.0  # Amplitude of noise to add
 noise_scalelength = 10.0  # Spatial scale length (number of cells)
 
 num_samples = 1  # Number of repeated solves, to gather statistics
@@ -244,17 +250,19 @@ fig1, ax1 = plt.subplots()
 fig2, ax2 = plt.subplots()
 fig3, ax3 = plt.subplots()
 
-for damping_multiplier in damping_multipliers:
+for oscillation_amplitude in oscillation_amplitudes:
     for noise_multiplier in noise_multipliers:
         mean_iterations = []
         max_iterations = []
         min_iterations = []
-        for turb_timescale in timescales:
-            result = collect_statistics({"noise_timescale": turb_timescale * noise_multiplier,    # AR time of random noise
-                                         "turb_timescale": turb_timescale,     # Flux relaxation time
-                                         "damping_timescale": turb_timescale * damping_multiplier,  # Flux damping timescale
+        for flux_timescale in timescales:
+            result = collect_statistics({"noise_timescale": flux_timescale * noise_multiplier,    # AR time of random noise
+                                         "flux_timescale": flux_timescale,     # Flux relaxation time
+                                         "oscillation_amplitude": oscillation_amplitude,
                                          "noise_amplitude": noise_amplitude,    # Amplitude of AR(1) noise
-                                         "noise_scalelength": noise_scalelength,   # Spatial scale length (cells)
+                                         "noise_scalelength": noise_scalelength,   # Spatial scale length (cells),
+                                         "p": shestakov_p,
+                                         "q": shestakov_q,
                                          "EWMAParamTurbFlux": alpha_flux,
                                          "EWMAParamProfile": alpha_profile,
                                          "thetaParams": {"Dmin": 1e-5, "Dmax": 1e13, "dpdxThreshold": 10},
@@ -264,7 +272,7 @@ for damping_multiplier in damping_multipliers:
                                         num_samples = num_samples)
 
             # Plot error history on figure 1 (for the last sample)
-            ax1.plot(result["err_history"], label=str(turb_timescale))
+            ax1.plot(result["err_history"], label=r"Time/$\tau_{{flux}}$ = {:.2f}".format(1./flux_timescale))
 
             mean_iterations.append(result["mean_iterations"])
             max_iterations.append(result["max_iterations"])
@@ -277,22 +285,19 @@ for damping_multiplier in damping_multipliers:
             1./timescales,
             mean_iterations,
             "-o",
-            label=r"$\tau_{{damp}} / \tau_{{turb}} = {}, \tau_{{noise}} / \tau_{{turb}} = {}$".format(damping_multiplier, noise_multiplier),
+            label=r"$\tau_{{noise}} / \tau_{{flux}} = {}, A_{{flux}} = {}$".format(noise_multiplier, oscillation_amplitude),
         )
 
         if num_samples > 1:
             print(mean_iterations, max_iterations, min_iterations)
             ax2.fill_between(1./timescales, min_iterations, max_iterations, alpha=0.5)
 
-        #ax2.axvline(1.0 / damping_multiplier, linestyle="--", color="k")
-        #ax2.axvline(1.0 / noise_multiplier, linestyle=":", color='k')
-
         # Plot total turbulence run time on figure 3
         ax3.plot(
             1. / timescales,
             np.array(mean_iterations) / timescales,
             "-o",
-            label=r"$\tau_{{damp}} / \tau_{{turb}} = {}, \tau_{{noise}} / \tau_{{turb}} = {}$".format(damping_multiplier, noise_multiplier),
+            label=r"$\tau_{{noise}} / \tau_{{flux}} = {}, A_{{flux}} = {}$".format(noise_multiplier, oscillation_amplitude),
         )
 
         if num_samples > 1:
@@ -312,7 +317,7 @@ fig1.savefig("residual_history.png")
 # Plot of iteration count against timescale
 ax2.set_xscale("log")
 ax2.set_yscale("log")
-ax2.set_xlabel(r"Simulation run time / $\tau_{{turb}}$")
+ax2.set_xlabel(r"Simulation run time / $\tau_{{flux}}$")
 ax2.set_ylabel("Iterations required")
 ax2.legend()
 
@@ -321,7 +326,7 @@ fig2.savefig("iteration_count.png")
 
 ax3.set_xscale("log")
 ax3.set_yscale("log")
-ax3.set_xlabel(r"Simulation run time / $\tau_{{turb}}$")
+ax3.set_xlabel(r"Simulation run time / $\tau_{{flux}}$")
 ax3.set_ylabel("Total run time required")
 ax3.legend()
 
@@ -330,20 +335,22 @@ fig3.savefig("run_time.png")
 
 plt.show()
 
-
 # ==============================================================================
 #  Settings
 # ==============================================================================
 
-turb_timescale = 1.0
-damping_multiplier = 1.0
-noise_multiplier = 1.0
+shestakov_p = 9
+shestakov_q = -6
 
-tolerance = 1e-2
+flux_timescale = 0.2
+noise_multiplier = 0.2
+oscillation_amplitude = 0.1
+
+tolerance = 1e-1
 alpha_ps = np.logspace(-2, 0, num=10)
 alpha_ds = np.logspace(-2, 0, num=10)
 
-noise_amplitude = 0.01  # Amplitude of noise to add
+noise_amplitude = 0.1  # Amplitude of noise to add
 noise_scalelength = 10.0  # Spatial scale length (number of cells)
 
 num_samples = 1  # Number of repeated solves, to gather statistics
@@ -357,18 +364,20 @@ iterations = np.zeros((len(alpha_ps), len(alpha_ds)))
 
 for i, alpha_p in enumerate(alpha_ps):
     for j, alpha_d in enumerate(alpha_ds):
-        result = collect_statistics({"noise_timescale": turb_timescale * noise_multiplier,    # AR time of random noise
-                                         "turb_timescale": turb_timescale,     # Flux relaxation time
-                                         "damping_timescale": turb_timescale * damping_multiplier,  # Flux damping timescale
-                                         "noise_amplitude": noise_amplitude,    # Amplitude of AR(1) noise
-                                         "noise_scalelength": noise_scalelength,   # Spatial scale length (cells)
-                                         "EWMAParamTurbFlux": alpha_d,
-                                         "EWMAParamProfile": alpha_p,
-                                         "thetaParams": {"Dmin": 1e-5, "Dmax": 1e13, "dpdxThreshold": 10},
-                                         "tol": tolerance,
-                                         "maxIterations": 1000,
-                                         "plot_convergence": False},
-                                        num_samples = num_samples)
+        result = collect_statistics({"noise_timescale": flux_timescale * noise_multiplier,    # AR time of random noise
+                                     "flux_timescale": flux_timescale,     # Flux relaxation time
+                                     "oscillation_amplitude": oscillation_amplitude,
+                                     "noise_amplitude": noise_amplitude,    # Amplitude of AR(1) noise
+                                     "noise_scalelength": noise_scalelength,   # Spatial scale length (cells)
+                                     "p": shestakov_p,
+                                     "q": shestakov_q,
+                                     "EWMAParamTurbFlux": alpha_d,
+                                     "EWMAParamProfile": alpha_p,
+                                     "thetaParams": {"Dmin": 1e-5, "Dmax": 1e13, "dpdxThreshold": 10},
+                                     "tol": tolerance,
+                                     "maxIterations": 1000,
+                                     "plot_convergence": False},
+                                    num_samples = num_samples)
         iterations[i,j] = result["mean_iterations"]
 
 plt.contourf(np.log10(alpha_ds), np.log10(alpha_ps), np.log10(iterations), 50)
