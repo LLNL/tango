@@ -6,7 +6,7 @@ class FluxRelaxation(object):
     Simple relaxation on a fixed timescale
     """
 
-    def __init__(self, fluxModel, timescale):
+    def __init__(self, timescale, fluxModel):
         """
         Inputs:
           fluxModel        fluxmodel to be decorated.
@@ -46,7 +46,7 @@ class FluxDoubleRelaxation(object):
     one timescale for the drive, and one for the damping.
     """
 
-    def __init__(self, fluxModel, turb_timescale, damp_timescale):
+    def __init__(self, turb_timescale, damp_timescale, fluxModel):
         """
         Inputs:
           fluxModel
@@ -94,3 +94,87 @@ class FluxDoubleRelaxation(object):
             newFluxes[key] = self.lastTurb[key] ** 2 / self.lastDrive[key]
 
         return newFluxes
+
+class FluxRelaxationOscillation(object):
+    """Decorator that adds time dependence to fluxes with oscillation
+    Relaxation on a fixed timescale, with oscillation of specified relative magnitude
+    """
+
+    def __init__(self, timescale, amplitude, fluxModel):
+        """
+        Inputs:
+          fluxModel        fluxmodel to be decorated.
+                           Should have a get_flux(profiles) method which takes
+                           a dictionary input and returns a dictionary of fluxes
+          timescale        Ratio of flux relaxation timescale to coupling period
+
+          amplitude        Relative oscillation amplitude e.g. 0.2 is 20%
+        """
+        assert hasattr(fluxModel, "get_flux") and callable(
+            getattr(fluxModel, "get_flux")
+        )
+        assert timescale > 0.0
+
+        self.fluxModel = fluxModel
+        # Weight between 0 and 1 on last fluxes (-> 0 as timescale becomes shorter)
+        self.weight = np.exp(-1.0 / timescale)
+        self.lastFluxes = None  # No previous flux
+        self.amplitude = amplitude # Oscillation relative amplitude
+        self.timescale = timescale
+        self.time = 0 # Keeps track of time for the oscillation phase
+
+    def get_flux(self, profiles):
+        # Call the flux model to get the new flux
+        newFluxes = self.fluxModel.get_flux(profiles)
+        if self.lastFluxes is None:
+            self.lastFluxes = newFluxes
+
+        # Apply relaxation to each flux channel
+        for key in newFluxes:
+            newFluxes[key] = (
+                self.weight * self.lastFluxes[key]
+                + (1.0 - self.weight) * newFluxes[key]
+            )
+
+        self.lastFluxes = newFluxes.copy() # Damping based on flux without oscillation
+
+        # Add a relative oscillation
+        for key in newFluxes:
+            newFluxes[key] *= (1. + self.amplitude * np.sin(3. * self.time / self.timescale))
+        self.time += 1
+        return newFluxes
+
+class FluxAverage(object):
+    """Decorator that averages the flux over a given number of iterations
+    """
+    def __init__(self, nsteps, fluxModel):
+        """
+        Inputs:
+          fluxModel        fluxmodel to be decorated.
+                           Should have a get_flux(profiles) method which takes
+                           a dictionary input and returns a dictionary of fluxes
+          nsteps           Number of steps
+        """
+        assert hasattr(fluxModel, "get_flux") and callable(
+            getattr(fluxModel, "get_flux")
+        )
+        assert nsteps > 0
+
+        self.fluxModel = fluxModel
+        self.nsteps = nsteps
+
+    def get_flux(self, profiles):
+        # Call the flux model to get the new flux
+        fluxes = self.fluxModel.get_flux(profiles)
+
+        # Sum fluxes over nsteps
+        for i in range(self.nsteps - 1):
+            next_fluxes = self.fluxModel.get_flux(profiles)
+            for key in fluxes:
+                fluxes[key] += next_fluxes[key]
+
+        # Divide by nsteps to get the average flux
+        for key in fluxes:
+            fluxes[key] /= self.nsteps
+
+        return fluxes

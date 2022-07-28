@@ -15,7 +15,7 @@ class NoisyFlux(object):
     to the flux returned by an inherent fluxModel.  The correlation length in space is
     controlled by the AR parameter.
     """
-    def __init__(self, fluxModel, amplitude, tac_x, dx):
+    def __init__(self, amplitude, tac_x, dx, fluxModel):
         """
         Inputs:
           fluxModel         fluxmodel to be decorated
@@ -66,7 +66,7 @@ class UniformNoisyFlux(object):
     """Decorator that adds random noise uniform in space (i.e., *perfectly* correlated) to the flux 
     returned by an inherent fluxModel.
     """
-    def __init__(self, fluxModel, amplitude):
+    def __init__(self, amplitude, fluxModel):
         """
         Inputs:
           fluxModel         fluxmodel to be decorated
@@ -110,7 +110,7 @@ class NoisyFluxSpaceTime(object):
     fluxModel.  The correlation length in space is controlled by the
     AR parameters
     """
-    def __init__(self, fluxModel, amplitude, tac_x, dx, tac_t, dt):
+    def __init__(self, amplitude, tac_x, dx, tac_t, dt, fluxModel):
         """
         Inputs:
           fluxModel         fluxmodel to be decorated
