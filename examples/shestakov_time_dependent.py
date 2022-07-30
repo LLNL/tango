@@ -12,35 +12,48 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 import tango.tango_logging as tlog
-from tango.extras import shestakov_nonlinear_diffusion
+from tango.extras.shestakov_nonlinear_diffusion import ShestakovTestProblem
 from tango.extras.fluxrelaxation import FluxRelaxation, FluxDoubleRelaxation, FluxRelaxationOscillation, FluxAverage
 from tango.extras.noisyflux import NoisyFlux, NoisyFluxSpaceTime
 import tango
 
-def initialize_shestakov_problem():
-    # Problem Setup
-    L = 1  # size of domain
-    N = 500  # number of spatial grid points
-    dx = L / (N - 1)  # spatial grid size
-    x = np.arange(N) * dx  # location corresponding to grid points j=0, ..., N-1
-    nL = 1e-2  # right boundary condition
-    nInitialCondition = 1 - 0.5 * x
-    return (L, N, dx, x, nL, nInitialCondition)
+class ShestakovProblem(ShestakovTestProblem):
+    def __init__(self,
+                 p = 3,
+                 q = -2,
+                 L = 1,   # size of domain
+                 N = 500, # number of spatial grid points
+                 rightBC = 1e-2, # right boundary condition
+                 initial = lambda x: 1 - 0.5*x):
+        self.L = L  # size of domain
+        self.N = N  # number of spatial grid points
+        self.dx = L / (N - 1)  # spatial grid size
+        self.x = np.arange(N) * self.dx  # location corresponding to grid points j=0, ..., N-1
+        self._rightBC = rightBC  # right boundary condition
+        self._initial = initial
 
-class ComputeAllH(object):
-    def __init__(self, test_problem):
-        self.test_problem = test_problem
+        super(ShestakovProblem, self).__init__(self.dx, p, q)
 
-    def __call__(self, t, x, profiles, HCoeffsTurb):
-        # n = profiles['default']
-        # Define the contributions to the H coefficients for the Shestakov Problem
+    def InitialCondition(self):
+        return self._initial(self.x)
+
+    def GetSource(self, x = None):
+        if x is None:
+            x = self.x
+        return super(ShestakovProblem, self).GetSource(x)
+
+    def steady_state_solution(self):
+        return super(ShestakovProblem, self).steady_state_solution(
+            self.x,
+            self.RightBC())
+
+    def RightBC(self):
+        return self._rightBC
+
+    def ComputeAllH(self, t, x, profiles, HCoeffsTurb):
         H1 = np.ones_like(x)
-        H7 = self.test_problem.H7contrib_Source(x)
-
-        HCoeffs = tango.multifield.HCoefficients(H1=H1, H7=H7)
-        HCoeffs = HCoeffs + HCoeffsTurb
-
-        return HCoeffs
+        H7 = self.H7contrib_Source(x)
+        return HCoeffsTurb + tango.multifield.HCoefficients(H1=H1, H7=H7)
 
 # ==============================================================================
 #  Solve function
@@ -62,25 +75,31 @@ def solve_system(noise_timescale = 1.0,    # AR time of random noise
                  check_tol = 0.1
                  ):
     tlog.info("Initializing...")
-    L, N, dx, x, nL, n = initialize_shestakov_problem()
-    test_problem = shestakov_nonlinear_diffusion.ShestakovTestProblem(dx, p=p, q=q)
 
-    nsteps = 200
-    fluxModel = FluxAverage(
-        nsteps, # Number of steps
-        NoisyFluxSpaceTime(
-            noise_amplitude,
-            noise_scalelength,
-            1.0, # dx
-            noise_timescale * nsteps, # noise timescale
-            1.0, # dt
-            FluxRelaxationOscillation(
-                flux_timescale * nsteps,
-                oscillation_amplitude,
-                test_problem)))
+    nsteps = 1
 
-    label = "n"
-    turbHandler = tango.lodestro_method.TurbulenceHandler(dx, x, fluxModel)
+    # test_problem = ShestakovProblem(p=p, q=q)
+
+    test_problem = FluxRelaxationOscillation(
+        flux_timescale * nsteps,
+        oscillation_amplitude,
+        ShestakovProblem(p=p, q=q))
+
+    # fluxModel = FluxAverage(
+    #     nsteps, # Number of steps
+    #     NoisyFluxSpaceTime(
+    #         noise_amplitude,
+    #         noise_scalelength,
+    #         1.0, # dx
+    #         noise_timescale * nsteps, # noise timescale
+    #         1.0, # dt
+    #         FluxRelaxationOscillation(
+    #             flux_timescale * nsteps,
+    #             oscillation_amplitude,
+    #             test_problem)))
+
+    turbHandler = tango.lodestro_method.TurbulenceHandler(
+        test_problem.dx, test_problem.x, test_problem)
 
     lodestroMethod = tango.lodestro_method.lm(
         EWMAParamTurbFlux,
@@ -88,11 +107,11 @@ def solve_system(noise_timescale = 1.0,    # AR time of random noise
         thetaParams,
     )
     field0 = tango.multifield.Field(
-        label=label,
-        rightBC=nL,
-        profile_mminus1=n,
-        compute_all_H=ComputeAllH(test_problem),
-        lodestroMethod=lodestroMethod,
+        label = test_problem.label(),
+        rightBC = test_problem.RightBC(),
+        profile_mminus1 = test_problem.InitialCondition(),
+        compute_all_H = test_problem.ComputeAllH,
+        lodestroMethod = lodestroMethod,
     )
     fields = [field0]
     tango.multifield.check_fields_initialize(fields)
@@ -104,7 +123,13 @@ def solve_system(noise_timescale = 1.0,    # AR time of random noise
     tArray = np.array([0, 1e4])  # specify the timesteps to be used.
 
     solver = tango.solver.Solver(
-        L, x, tArray, maxIterations, tol, compute_all_H_all_fields, fields,
+        test_problem.L,
+        test_problem.x,
+        tArray,
+        maxIterations,
+        tol,
+        compute_all_H_all_fields,
+        fields,
         saveFluxesInMemory = plot_convergence
     )
 
@@ -130,10 +155,12 @@ def solve_system(noise_timescale = 1.0,    # AR time of random noise
             num_iterations = maxIterations
             break
 
+        label = test_problem.label()
+
         n = solver.profiles[label]  # finished solution
 
-        source = test_problem.GetSource(x)
-        nss = test_problem.steady_state_solution(x, nL)
+        source = test_problem.GetSource()
+        nss = test_problem.steady_state_solution()
 
         solutionResidual = (n - nss) / np.max(np.abs(nss))
         solutionRmsError = np.sqrt(1 / len(n) * np.sum(solutionResidual ** 2))
@@ -226,15 +253,15 @@ def collect_statistics(inputs, num_samples=20):
 # ==============================================================================
 
 timescales = np.logspace(np.log10(0.01), np.log10(10), 7)
-oscillation_amplitudes = []#, 1e-2, 1e-1]
+oscillation_amplitudes = [0.0]#, 1e-2, 1e-1]
 noise_multipliers = [0.2]
 
 tolerance = 1e-1
-alpha_profile = 0.03
+alpha_profile = 1
 alpha_flux = 0.1
 
-shestakov_p = 15
-shestakov_q = -10
+shestakov_p = 3
+shestakov_q = -2
 
 noise_amplitude = 0.0  # Amplitude of noise to add
 noise_scalelength = 10.0  # Spatial scale length (number of cells)
@@ -334,6 +361,8 @@ fig3.savefig("run_time.pdf")
 fig3.savefig("run_time.png")
 
 plt.show()
+
+sys.exit(0)
 
 # ==============================================================================
 #  Settings

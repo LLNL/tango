@@ -41,6 +41,9 @@ class AnalyticFluxModel:
         flux = self.get_flux(n, dx)
         return self._dxCenteredDifference(flux, dx)
 
+    def label(self):
+        return self.field
+
     def _dxCenteredDifference(self, u, dx):
         """Compute du/dx.
         du/dx is computed using centered differences on the same grid as u.  For the edge points, one-point differences are used.

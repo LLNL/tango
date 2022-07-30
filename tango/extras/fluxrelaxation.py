@@ -95,86 +95,105 @@ class FluxDoubleRelaxation(object):
 
         return newFluxes
 
-class FluxRelaxationOscillation(object):
+def FluxRelaxationOscillation(timescale, amplitude, fluxModel):
     """Decorator that adds time dependence to fluxes with oscillation
     Relaxation on a fixed timescale, with oscillation of specified relative magnitude
-    """
 
-    def __init__(self, timescale, amplitude, fluxModel):
-        """
-        Inputs:
-          fluxModel        fluxmodel to be decorated.
-                           Should have a get_flux(profiles) method which takes
-                           a dictionary input and returns a dictionary of fluxes
+    # Inputs
           timescale        Ratio of flux relaxation timescale to coupling period
 
           amplitude        Relative oscillation amplitude e.g. 0.2 is 20%
-        """
-        assert hasattr(fluxModel, "get_flux") and callable(
-            getattr(fluxModel, "get_flux")
-        )
-        assert timescale > 0.0
 
-        self.fluxModel = fluxModel
-        # Weight between 0 and 1 on last fluxes (-> 0 as timescale becomes shorter)
-        self.weight = np.exp(-1.0 / timescale)
-        self.lastFluxes = None  # No previous flux
-        self.amplitude = amplitude # Oscillation relative amplitude
-        self.timescale = timescale
-        self.time = 0 # Keeps track of time for the oscillation phase
+          fluxModel        fluxmodel to be decorated.
+                           Should have a get_flux(profiles) method which takes
+                           a dictionary input and returns a dictionary of fluxes
 
-    def get_flux(self, profiles):
-        # Call the flux model to get the new flux
-        newFluxes = self.fluxModel.get_flux(profiles)
-        if self.lastFluxes is None:
-            self.lastFluxes = newFluxes
+    Note: The fluxModel object will be modified
+
+    # Returns
+
+    The modified fluxModel object, with new get_flux method
+
+    # Example
+
+    """
+    assert hasattr(fluxModel, "get_flux") and callable(
+        getattr(fluxModel, "get_flux")
+    )
+    assert timescale > 0.0
+
+    # We're going to wrap this function
+    inner_get_flux = fluxModel.get_flux
+
+    # Weight between 0 and 1 on last fluxes (-> 0 as timescale becomes shorter)
+    weight = np.exp(-1.0 / timescale)
+    last_fluxes = None  # No previous flux
+    time = 0 # Keeps track of time for the oscillation phase
+
+    # Replacement flux calculation
+    def get_flux(profiles):
+        nonlocal inner_get_flux
+        nonlocal last_fluxes
+        nonlocal time
+        nonlocal weight
+        # Call the wrapped flux model to get the new flux
+        new_fluxes = inner_get_flux(profiles)
+        if last_fluxes is None:
+            last_fluxes = new_fluxes
 
         # Apply relaxation to each flux channel
-        for key in newFluxes:
-            newFluxes[key] = (
-                self.weight * self.lastFluxes[key]
-                + (1.0 - self.weight) * newFluxes[key]
+        for key in new_fluxes:
+            new_fluxes[key] = (
+                weight * last_fluxes[key]
+                + (1.0 - weight) * new_fluxes[key]
             )
 
-        self.lastFluxes = newFluxes.copy() # Damping based on flux without oscillation
+        last_fluxes = new_fluxes.copy() # Damping based on flux without oscillation
 
         # Add a relative oscillation
-        for key in newFluxes:
-            newFluxes[key] *= (1. + self.amplitude * np.sin(3. * self.time / self.timescale))
-        self.time += 1
-        return newFluxes
+        for key in new_fluxes:
+            new_fluxes[key] *= (1. + amplitude * np.sin(3. * time / timescale))
+        time += 1
+        return new_fluxes
 
-class FluxAverage(object):
+    # Replace the get_flux method
+    fluxModel.get_flux = get_flux
+    return fluxModel
+
+def FluxAverage(nsteps, fluxModel):
     """Decorator that averages the flux over a given number of iterations
-    """
-    def __init__(self, nsteps, fluxModel):
-        """
-        Inputs:
+    
+    # Inputs:
           fluxModel        fluxmodel to be decorated.
                            Should have a get_flux(profiles) method which takes
                            a dictionary input and returns a dictionary of fluxes
           nsteps           Number of steps
-        """
-        assert hasattr(fluxModel, "get_flux") and callable(
-            getattr(fluxModel, "get_flux")
-        )
-        assert nsteps > 0
 
-        self.fluxModel = fluxModel
-        self.nsteps = nsteps
+    """
+    assert hasattr(fluxModel, "get_flux") and callable(
+        getattr(fluxModel, "get_flux")
+    )
+    assert nsteps > 0
+    
+    inner_get_flux = fluxModel.get_flux
 
-    def get_flux(self, profiles):
+    def get_flux(profiles):
+        nonlocal inner_get_flux
+        
         # Call the flux model to get the new flux
-        fluxes = self.fluxModel.get_flux(profiles)
+        fluxes = inner_get_flux(profiles)
 
         # Sum fluxes over nsteps
-        for i in range(self.nsteps - 1):
-            next_fluxes = self.fluxModel.get_flux(profiles)
+        for i in range(nsteps - 1):
+            next_fluxes = inner_get_flux(profiles)
             for key in fluxes:
                 fluxes[key] += next_fluxes[key]
 
         # Divide by nsteps to get the average flux
         for key in fluxes:
-            fluxes[key] /= self.nsteps
-
+            fluxes[key] /= nsteps
         return fluxes
+
+    # Replace the get_flux function
+    fluxModel.get_flux = get_flux
+    return fluxModel
