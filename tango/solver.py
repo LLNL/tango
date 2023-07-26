@@ -116,6 +116,7 @@ class Solver(object):
         self.reachedEnd = False
         self.profilesAllIterations = None
         self.fluxesAllIterations = None
+        self.fluxesAllIterationsEWMA = None
         
         # initialize data containers for storing profiles and fluxes when using multiple timesteps
         self.profilesAllTimesteps = {}
@@ -140,9 +141,11 @@ class Solver(object):
         self.errHistory[:] = 0
         self.profilesAllIterations = {}
         self.fluxesAllIterations = {}
+        self.fluxesAllIterationsEWMA = {}
         for field in self.fields:
             self.profilesAllIterations[field.label] = np.zeros((self.maxIterations, self.N))
             self.fluxesAllIterations[field.label] = np.zeros((self.maxIterations, self.N))
+            self.fluxesAllIterationsEWMA[field.label] = np.zeros((self.maxIterations, self.N))
             
         tango_logging.info("Timestep m={}:  Beginning iteration loop ...".format(self.m))
 
@@ -165,7 +168,8 @@ class Solver(object):
         for field in self.fields:
             self.profilesAllIterations[field.label] = self.profilesAllIterations[field.label][0:self.countStoredIterations, :]
             self.fluxesAllIterations[field.label] = self.fluxesAllIterations[field.label][0:self.countStoredIterations, :]
-            
+            self.fluxesAllIterationsEWMA[field.label] = self.fluxesAllIterationsEWMA[field.label][0:self.countStoredIterations, :]
+
         # save the last iteration for the profiles and fluxes to represent the converged values at each timestep
         for field in self.fields:
             self.profilesAllTimesteps[field.label][self.m, :] = self.profiles[field.label]
@@ -257,6 +261,7 @@ class Solver(object):
             if self.saveFluxesInMemory:
                 if extradataAllFields is not None:
                     self.fluxesAllIterations[field.label][index, :] = extradataAllFields[field.label]['fluxTurbGrid']
+                    self.fluxesAllIterationsEWMA[field.label][index, :] = extradataAllFields[field.label]['fluxEWMATurbGrid']
         
         self.fileHandlerExecutor.execute_scheduled(datadict, self.iterationNumber)
 
@@ -405,14 +410,19 @@ class Solver(object):
     def ok(self):
         """True unless a stop condition is reached."""
         if self.solutionError == True:
+            print("solutionError")
             return False
         elif self.m >= len(self.tArray) - 1:
+            print("m")
             return False
         elif self.t >= self.tFinal:
+            print("tFinal")
             return False
         elif self.iterationNumber >= self.maxIterations:
+            print("iterationNumber")
             return False
         elif self.countStoredIterations >= self.maxIterationsPerSet:
+            print("countStoredIterations")
             return False
         else:
             return True
